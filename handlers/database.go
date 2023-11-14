@@ -3,7 +3,6 @@ package handlers
 import (
 	"butler-server/service"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -22,25 +21,25 @@ type QueryRequest struct {
 }
 
 func parseRequest(c *gin.Context) (*QueryRequest, error) {
-	var requestBody struct {
-		EncryptedData string `json:"encrypted_payload"`
-	}
-
-	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		return nil, err
-	}
-	key := []byte("sample_encryption_key")
-
-	decryptedData, err := service.Decrypt(requestBody.EncryptedData, key)
-	if err != nil {
-		return nil, err
-	}
+	// var requestBody struct {
+	// 	EncryptedData string `json:"encrypted_payload"`
+	// }
 
 	var requestData QueryRequest
 
-	if err := json.Unmarshal([]byte(decryptedData), &requestData); err != nil {
+	if err := c.ShouldBindJSON(&requestData); err != nil {
 		return nil, err
 	}
+	// key := []byte("your_secret_key_here_of_32_chars")
+
+	// decryptedData, err := service.Decrypt(requestBody.EncryptedData, key)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// if err := json.Unmarshal([]byte(decryptedData), &requestData); err != nil {
+	// 	return nil, err
+	// }
 	return &requestData, nil
 
 }
@@ -59,7 +58,16 @@ func HandleDatabases(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SHOW DATABASES")
+	var databaseQuery string
+
+	switch requestData.Driver {
+	case "postgres":
+		databaseQuery = "SELECT datname FROM pg_database"
+	case "mysql":
+		databaseQuery = "SHOW DATABASES"
+
+	}
+	rows, err := db.Query(databaseQuery)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return

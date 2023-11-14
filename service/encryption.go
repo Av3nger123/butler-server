@@ -4,36 +4,37 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
-	"errors"
 )
 
+const nonceSize = 12
+
 func Decrypt(data string, key []byte) (string, error) {
-	decodedData, err := base64.StdEncoding.DecodeString(data)
+	cipherText, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return "", err
 	}
+
+	// Extract nonce, encrypted payload, and tag
+	nonce := cipherText[:12]
+	encryptedPayload := cipherText[12 : len(cipherText)-16]
+	tag := cipherText[len(cipherText)-16:]
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}
 
-	if len(decodedData) < aes.BlockSize {
-		return "", errors.New("invalid data length")
-	}
-
-	iv := decodedData[:aes.BlockSize]
-	encryptedData := decodedData[aes.BlockSize:]
-
-	mode, err := cipher.NewGCM(block)
+	// Create a GCM cipher
+	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", err
 	}
 
-	decryptedData, err := mode.Open(nil, iv, encryptedData, nil)
+	// Decrypt the payload
+	decryptedPayload, err := aesGCM.Open(nil, nonce, encryptedPayload, tag)
 	if err != nil {
 		return "", err
 	}
 
-	return string(decryptedData), nil
+	return string(decryptedPayload), nil
 }

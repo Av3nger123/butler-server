@@ -3,6 +3,9 @@ package service
 import (
 	"database/sql"
 	"fmt"
+
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 )
 
 func ConnectToDB(driverName, username, password, host, port, dbName string) (*sql.DB, error) {
@@ -10,7 +13,7 @@ func ConnectToDB(driverName, username, password, host, port, dbName string) (*sq
 
 	switch driverName {
 	case "postgres":
-		dataSourceName = fmt.Sprintf("user=%s dbname=%s host=%s port=%s sslmode=disable", username, dbName, host, port)
+		dataSourceName = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, dbName)
 	case "mysql":
 		dataSourceName = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, dbName)
 	default:
