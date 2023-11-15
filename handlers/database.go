@@ -4,6 +4,7 @@ import (
 	"butler-server/service"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -143,14 +144,14 @@ func HandleSchema(c *gin.Context) {
 		return
 	}
 
-	db, err := service.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, "")
+	db, err := service.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, requestData.DbName)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.column WHERE table_name = '%s';", requestData.TableName))
+	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = '%s';", requestData.TableName))
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return
@@ -158,7 +159,6 @@ func HandleSchema(c *gin.Context) {
 	defer rows.Close()
 
 	schemaDetails := make(map[string]map[string]interface{})
-
 	for rows.Next() {
 		var columnName, dataType, isNullable string
 		var characterMaxLength sql.NullInt64
@@ -170,14 +170,43 @@ func HandleSchema(c *gin.Context) {
 		}
 
 		columnDetails := map[string]interface{}{
-			"Data Type":   dataType,
-			"Max Length":  characterMaxLength,
-			"Is Nullable": isNullable,
+			"dataType":   dataType,
+			"maxLength":  characterMaxLength,
+			"isNullable": isNullable,
 		}
 
 		schemaDetails[columnName] = columnDetails
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Schema for " + requestData.TableName + " found", "schema": schemaDetails})
+
+	query := fmt.Sprintf(`
+		SELECT indexname, indexdef
+		FROM pg_indexes
+		WHERE tablename = '%s';
+	`, requestData.TableName)
+
+	rows, err = db.Query(query)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	indexes := make([]map[string]interface{}, 0)
+
+	for rows.Next() {
+		var indexName, indexDef string
+		err := rows.Scan(&indexName, &indexDef)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		indexDetails := map[string]interface{}{
+			"indexName": indexName,
+			"indexDef":  indexDef,
+		}
+
+		indexes = append(indexes, indexDetails)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Schema for " + requestData.TableName + " found", "schema": schemaDetails, "indexes": indexes})
 
 }
 
