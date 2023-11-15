@@ -151,7 +151,7 @@ func HandleSchema(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = '%s';", requestData.TableName))
+	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position FROM information_schema.columns WHERE table_name = '%s';", requestData.TableName))
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return
@@ -160,19 +160,22 @@ func HandleSchema(c *gin.Context) {
 
 	schemaDetails := make(map[string]map[string]interface{})
 	for rows.Next() {
-		var columnName, dataType, isNullable string
+		var columnName, dataType, isNullable, udtName, ordinalPosition string
 		var characterMaxLength sql.NullInt64
+		var columnDefault sql.NullString
 
-		err := rows.Scan(&columnName, &dataType, &characterMaxLength, &isNullable)
+		err := rows.Scan(&columnName, &dataType, &characterMaxLength, &isNullable, &columnDefault, &udtName, &ordinalPosition)
 		if err != nil {
 			service.InternalServerError(err, c, "Failed to fetch schema")
 			return
 		}
 
 		columnDetails := map[string]interface{}{
-			"dataType":   dataType,
-			"maxLength":  characterMaxLength,
-			"isNullable": isNullable,
+			"dataType":      udtName,
+			"maxLength":     characterMaxLength,
+			"isNullable":    isNullable,
+			"position":      ordinalPosition,
+			"columnDefault": columnDefault,
 		}
 
 		schemaDetails[columnName] = columnDetails
