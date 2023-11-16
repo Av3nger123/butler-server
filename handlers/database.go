@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -110,30 +111,10 @@ func HandleQuery(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var result []map[string]interface{}
-	columns, err := rows.Columns()
+	result, err := parseRows(rows)
 	if err != nil {
-		service.InternalServerError(err, c, "Failed to get columns of the query")
+		service.InternalServerError(err, c, "Failed to parse rows")
 		return
-	}
-
-	values := make([]interface{}, len(columns))
-	for rows.Next() {
-		for i := range values {
-			values[i] = new(interface{})
-		}
-
-		if err := rows.Scan(values...); err != nil {
-			service.InternalServerError(err, c, "Failed to assign values")
-			return
-		}
-
-		rowData := make(map[string]interface{})
-		for i, column := range columns {
-			rowData[column] = *values[i].(*interface{})
-		}
-
-		result = append(result, rowData)
 	}
 	c.JSON(http.StatusOK, gin.H{"result": result})
 }
@@ -254,6 +235,8 @@ func HandleData(c *gin.Context) {
 	sizeStr := c.DefaultQuery("size", "50")
 	sortBy := c.Query("sort")
 	order := c.DefaultQuery("order", "asc")
+	filterParam := c.Query("filter")
+	filterOperator := c.Query("operator")
 
 	// Convert page and size to integers
 	page, err := strconv.Atoi(pageStr)
@@ -271,7 +254,7 @@ func HandleData(c *gin.Context) {
 	}
 
 	if order != "asc" && order != "desc" {
-		service.BadRequestError(fmt.Errorf("Invalid order parameter"), c, "Please check the order param in the URL. It should be either 'asc' or 'dsc'")
+		service.BadRequestError(fmt.Errorf("invalid order parameter"), c, "Please check the order param in the URL. It should be either 'asc' or 'dsc'")
 		return
 	}
 
@@ -290,23 +273,61 @@ func HandleData(c *gin.Context) {
 	}
 	defer db.Close()
 
+	filterMap := parseFilterParam(filterParam)
+
 	query := fmt.Sprintf("SELECT * FROM %s", requestData.TableName)
+	if filterOperator == "and" {
+		filterOperator = "AND"
+	} else if filterOperator == "or" {
+		filterOperator = "OR"
+	}
+
+	if len(filterMap) > 0 {
+		whereClauses := make([]string, 0)
+		for key, _ := range filterMap {
+			whereClauses = append(whereClauses, fmt.Sprintf("%s LIKE ?", key))
+		}
+		query += " WHERE " + strings.Join(whereClauses, " "+filterOperator+" ")
+	}
 	if sortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, order)
 	}
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, filterValues(filterMap)...)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	defer rows.Close()
 
+	result, err := parseRows(rows)
+	if err != nil {
+		service.InternalServerError(err, c, "Failed to parse rows")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result})
+}
+
+func parseFilterParam(filterParam string) map[string]string {
+	filterMap := make(map[string]string)
+	if filterParam != "" {
+		filters := strings.Split(filterParam, ",")
+		for _, pair := range filters {
+
+			filter := strings.Split(pair, ":")
+			if len(filter) == 2 {
+				filterMap[filter[0]] = filter[1]
+			}
+		}
+	}
+	return filterMap
+}
+
+func parseRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 	columns, err := rows.Columns()
 	if err != nil {
-		service.InternalServerError(err, c, "Failed to get columns")
-		return
+		return nil, err
 	}
 	var result []map[string]interface{}
 	values := make([]interface{}, len(columns))
@@ -317,8 +338,7 @@ func HandleData(c *gin.Context) {
 		}
 		err := rows.Scan(values...)
 		if err != nil {
-			service.InternalServerError(err, c, "Failed to fetch tables")
-			return
+			return nil, err
 		}
 		rowData := make(map[string]interface{})
 		for i, column := range columns {
@@ -326,5 +346,13 @@ func HandleData(c *gin.Context) {
 		}
 		result = append(result, rowData)
 	}
-	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result})
+	return result, err
+}
+
+func filterValues(filters map[string]string) []interface{} {
+	values := make([]interface{}, 0, len(filters))
+	for _, value := range filters {
+		values = append(values, value)
+	}
+	return values
 }
