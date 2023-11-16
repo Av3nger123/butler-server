@@ -111,7 +111,7 @@ func HandleQuery(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	result, err := parseRows(rows)
+	result, err := service.ParseRows(rows)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to parse rows")
 		return
@@ -273,7 +273,7 @@ func HandleData(c *gin.Context) {
 	}
 	defer db.Close()
 
-	filterMap := parseFilterParam(filterParam)
+	filterMap := service.ParseFilterParam(filterParam)
 
 	query := fmt.Sprintf("SELECT * FROM %s", requestData.TableName)
 	if filterOperator == "and" {
@@ -284,8 +284,9 @@ func HandleData(c *gin.Context) {
 
 	if len(filterMap) > 0 {
 		whereClauses := make([]string, 0)
-		for key, _ := range filterMap {
-			whereClauses = append(whereClauses, fmt.Sprintf("%s LIKE ?", key))
+		for key, value := range filterMap {
+			operator, conditionValue := service.ParseOperatorAndValue(value)
+			whereClauses = append(whereClauses, service.ConstructCondition(key, operator, conditionValue, whereClauses))
 		}
 		query += " WHERE " + strings.Join(whereClauses, " "+filterOperator+" ")
 	}
@@ -294,65 +295,17 @@ func HandleData(c *gin.Context) {
 	}
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
 
-	rows, err := db.Query(query, filterValues(filterMap)...)
+	rows, err := db.Query(query, service.FilterValues(filterMap)...)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	defer rows.Close()
 
-	result, err := parseRows(rows)
+	result, err := service.ParseRows(rows)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to parse rows")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result})
-}
-
-func parseFilterParam(filterParam string) map[string]string {
-	filterMap := make(map[string]string)
-	if filterParam != "" {
-		filters := strings.Split(filterParam, ",")
-		for _, pair := range filters {
-
-			filter := strings.Split(pair, ":")
-			if len(filter) == 2 {
-				filterMap[filter[0]] = filter[1]
-			}
-		}
-	}
-	return filterMap
-}
-
-func parseRows(rows *sql.Rows) ([]map[string]interface{}, error) {
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	var result []map[string]interface{}
-	values := make([]interface{}, len(columns))
-	for rows.Next() {
-
-		for i := range values {
-			values[i] = new(interface{})
-		}
-		err := rows.Scan(values...)
-		if err != nil {
-			return nil, err
-		}
-		rowData := make(map[string]interface{})
-		for i, column := range columns {
-			rowData[column] = *values[i].(*interface{})
-		}
-		result = append(result, rowData)
-	}
-	return result, err
-}
-
-func filterValues(filters map[string]string) []interface{} {
-	values := make([]interface{}, 0, len(filters))
-	for _, value := range filters {
-		values = append(values, value)
-	}
-	return values
 }
