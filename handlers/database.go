@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -248,6 +249,34 @@ func HandleTables(c *gin.Context) {
 }
 
 func HandleData(c *gin.Context) {
+
+	pageStr := c.DefaultQuery("page", "0")
+	sizeStr := c.DefaultQuery("size", "50")
+	sortBy := c.Query("sort")
+	order := c.DefaultQuery("order", "asc")
+
+	// Convert page and size to integers
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		// Handle the error, for example, return a bad request response
+		service.BadRequestError(err, c, "Please check the page param in the URL")
+		return
+	}
+
+	size, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		// Handle the error, for example, return a bad request response
+		service.BadRequestError(err, c, "Please check the page param in the URL")
+		return
+	}
+
+	if order != "asc" && order != "desc" {
+		service.BadRequestError(fmt.Errorf("Invalid order parameter"), c, "Please check the order param in the URL. It should be either 'asc' or 'dsc'")
+		return
+	}
+
+	offset := (page) * size
+
 	requestData, err := parseRequest(c)
 	if err != nil {
 		service.BadRequestError(err, c, "Failed to parse request body")
@@ -261,7 +290,13 @@ func HandleData(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT * FROM your_table;")
+	query := fmt.Sprintf("SELECT * FROM %s", requestData.TableName)
+	if sortBy != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, order)
+	}
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
+
+	rows, err := db.Query(query)
 	if err != nil {
 		service.InternalServerError(err, c, "Failed to run query")
 		return
