@@ -246,3 +246,50 @@ func HandleTables(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"messages": "Tables found", "tables": tables})
 }
+
+func HandleData(c *gin.Context) {
+	requestData, err := parseRequest(c)
+	if err != nil {
+		service.BadRequestError(err, c, "Failed to parse request body")
+		return
+	}
+
+	db, err := service.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, requestData.DbName)
+	if err != nil {
+		service.InternalServerError(err, c, "Failed connecting to the db cluster")
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT * FROM your_table;")
+	if err != nil {
+		service.InternalServerError(err, c, "Failed to run query")
+		return
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		service.InternalServerError(err, c, "Failed to get columns")
+		return
+	}
+	var result []map[string]interface{}
+	values := make([]interface{}, len(columns))
+	for rows.Next() {
+
+		for i := range values {
+			values[i] = new(interface{})
+		}
+		err := rows.Scan(values...)
+		if err != nil {
+			service.InternalServerError(err, c, "Failed to fetch tables")
+			return
+		}
+		rowData := make(map[string]interface{})
+		for i, column := range columns {
+			rowData[column] = *values[i].(*interface{})
+		}
+		result = append(result, rowData)
+	}
+	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result})
+}

@@ -15,6 +15,7 @@ func StartServer() {
 	r.POST("/databases", HandleDatabases)
 	r.POST("/tables", HandleTables)
 	r.POST("/schema", HandleSchema)
+	r.POST("/data", HandleData)
 
 	log.Fatal(r.Run(":8080"))
 }
