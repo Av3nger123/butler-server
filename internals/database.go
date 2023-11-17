@@ -1,8 +1,9 @@
-package service
+package internals
 
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -165,4 +166,31 @@ func ConstructCondition(column, operator, value string, whereClauses []string) s
 		return fmt.Sprintf("%s LIKE $%d", column, len(whereClauses)+1)
 	}
 	return ""
+}
+
+func ConvertIndexDef(sqlStatement string) (map[string]interface{}, error) {
+	// Define a regular expression pattern to extract relevant information
+	pattern := `CREATE\s+(UNIQUE)?\s+INDEX\s+(\w+)\s+ON\s+(\w+)\s+USING\s+(\w+)\s+\((\w+)\)`
+
+	// Use regex to find matches in the SQL statement
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(sqlStatement)
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("No match found in the SQL statement")
+	}
+
+	// Extract matched groups
+	isUnique := strings.TrimSpace(matches[1]) == "UNIQUE"
+	indexName, _, indexAlgorithm, columnName := matches[2], matches[3], matches[4], matches[5]
+
+	// Create a map with the extracted information
+	indexInfo := map[string]interface{}{
+		"indexName":      indexName,
+		"indexAlgorithm": indexAlgorithm,
+		"isUnique":       isUnique,
+		"columnName":     columnName,
+	}
+
+	return indexInfo, nil
 }

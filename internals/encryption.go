@@ -1,4 +1,4 @@
-package service
+package internals
 
 import (
 	"crypto/aes"
