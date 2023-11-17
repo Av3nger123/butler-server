@@ -10,6 +10,41 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type SchemaDetails struct {
+	DataType      string         `json:"dataType"`
+	MaxLength     sql.NullInt64  `json:"maxLength"`
+	IsNullable    string         `json:"isNullable"`
+	Position      string         `json:"position"`
+	ColumnDefault sql.NullString `json:"columnDefault"`
+}
+
+type IndexDetails struct {
+	IndexName      string `json:"indexName"`
+	IndexDef       string `json:"indexDef"`
+	IndexAlgorithm string `json:"indexAlgorithm"`
+	IsUnique       bool   `json:"isUnique"`
+	ColumnName     string `json:"columnName"`
+}
+
+type ForeignKeyDetails struct {
+	ConstraintName    string `json:"constraintName"`
+	TableName         string `json:"tableName"`
+	ColumnName        string `json:"columnName"`
+	ForeignTableName  string `json:"foreignTableName"`
+	ForeignColumnName string `json:"foreignColumnName"`
+}
+
+type QueryRequest struct {
+	Driver    string `json:"type"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Host      string `json:"host"`
+	Port      string `json:"port"`
+	DbName    string `json:"dbname"`
+	Query     string `json:"query"`
+	TableName string `json:"tablename"`
+}
+
 func ConnectToDB(driverName, username, password, host, port, dbName string) (*sql.DB, error) {
 	var dataSourceName string
 
@@ -193,4 +228,131 @@ func ConvertIndexDef(sqlStatement string) (map[string]interface{}, error) {
 	}
 
 	return indexInfo, nil
+}
+
+func FetchSchemaDetails(db *sql.DB, tableName string) (map[string]SchemaDetails, error) {
+	query := fmt.Sprintf(`
+		SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position 
+		FROM information_schema.columns 
+		WHERE table_name = $1;`)
+	rows, err := db.Query(query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	schemaDetails := make(map[string]SchemaDetails)
+	for rows.Next() {
+		var columnName, dataType, isNullable, udtName, ordinalPosition string
+		var characterMaxLength sql.NullInt64
+		var columnDefault sql.NullString
+
+		err := rows.Scan(&columnName, &dataType, &characterMaxLength, &isNullable, &columnDefault, &udtName, &ordinalPosition)
+		if err != nil {
+			return nil, err
+		}
+
+		columnDetails := SchemaDetails{
+			DataType:      udtName,
+			MaxLength:     characterMaxLength,
+			IsNullable:    isNullable,
+			Position:      ordinalPosition,
+			ColumnDefault: columnDefault,
+		}
+
+		schemaDetails[columnName] = columnDetails
+	}
+
+	return schemaDetails, nil
+}
+
+func FetchIndexDetails(db *sql.DB, tableName string) ([]IndexDetails, error) {
+	query := fmt.Sprintf(`
+		SELECT indexname, indexdef
+		FROM pg_indexes
+		WHERE tablename = $1;`)
+	rows, err := db.Query(query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []IndexDetails
+	for rows.Next() {
+		var indexName, indexDef string
+		err := rows.Scan(&indexName, &indexDef)
+		if err != nil {
+			return nil, err
+		}
+
+		indexDetails := IndexDetails{
+			IndexName: indexName,
+			IndexDef:  indexDef,
+		}
+		indexDefJson, err := ConvertIndexDef(indexDef)
+		if err == nil {
+			indexDetails.IndexAlgorithm = indexDefJson["indexAlgorithm"].(string)
+			indexDetails.IsUnique = indexDefJson["isUnique"].(bool)
+			indexDetails.ColumnName = indexDefJson["columnName"].(string)
+		}
+
+		indexes = append(indexes, indexDetails)
+	}
+
+	return indexes, nil
+}
+
+func FetchForeignKeyDetails(db *sql.DB, schemaName string) ([]ForeignKeyDetails, error) {
+	query := `
+		SELECT
+			conname AS constraint_name,
+			conrelid::regclass AS table_name,
+			ta.attname AS column_name,
+			confrelid::regclass AS foreign_table_name,
+			fa.attname AS foreign_column_name
+		FROM (
+			SELECT
+				conname,
+				conrelid,
+				confrelid,
+				unnest(conkey) AS conkey,
+				unnest(confkey) AS confkey
+			FROM pg_constraint
+		) sub
+		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
+		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey
+		WHERE conrelid = $1::regclass;`
+	rows, err := db.Query(query, schemaName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var foreignKeys []ForeignKeyDetails
+	for rows.Next() {
+		var (
+			constraintName    string
+			tableName         string
+			columnName        string
+			foreignTableName  string
+			foreignColumnName string
+		)
+
+		err := rows.Scan(&constraintName, &tableName, &columnName, &foreignTableName, &foreignColumnName)
+		if err != nil {
+			return nil, err
+		}
+		if tableName == schemaName {
+			result := ForeignKeyDetails{
+				ConstraintName:    constraintName,
+				TableName:         tableName,
+				ColumnName:        columnName,
+				ForeignTableName:  foreignTableName,
+				ForeignColumnName: foreignColumnName,
+			}
+			foreignKeys = append(foreignKeys, result)
+		}
+	}
+	return foreignKeys, nil
+
 }

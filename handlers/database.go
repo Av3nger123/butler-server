@@ -2,9 +2,7 @@ package handlers
 
 import (
 	"butler-server/internals"
-	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,23 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type QueryRequest struct {
-	Driver    string `json:"type"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	Host      string `json:"host"`
-	Port      string `json:"port"`
-	DbName    string `json:"dbname"`
-	Query     string `json:"query"`
-	TableName string `json:"tablename"`
-}
-
-func parseRequest(c *gin.Context) (*QueryRequest, error) {
+func parseRequest(c *gin.Context) (*internals.QueryRequest, error) {
 	// var requestBody struct {
 	// 	EncryptedData string `json:"encrypted_payload"`
 	// }
 
-	var requestData QueryRequest
+	var requestData internals.QueryRequest
 
 	if err := c.ShouldBindJSON(&requestData); err != nil {
 		return nil, err
@@ -133,127 +120,28 @@ func HandleSchema(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position FROM information_schema.columns WHERE table_name = '%s';", requestData.TableName))
+	// Fetch schema details
+	schemaDetails, err := internals.FetchSchemaDetails(db, requestData.TableName)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
-		return
-	}
-	defer rows.Close()
-
-	schemaDetails := make(map[string]map[string]interface{})
-	for rows.Next() {
-		var columnName, dataType, isNullable, udtName, ordinalPosition string
-		var characterMaxLength sql.NullInt64
-		var columnDefault sql.NullString
-
-		err := rows.Scan(&columnName, &dataType, &characterMaxLength, &isNullable, &columnDefault, &udtName, &ordinalPosition)
-		if err != nil {
-			internals.InternalServerError(err, c, "Failed to fetch schema")
-			return
-		}
-
-		columnDetails := map[string]interface{}{
-			"dataType":      udtName,
-			"maxLength":     characterMaxLength,
-			"isNullable":    isNullable,
-			"position":      ordinalPosition,
-			"columnDefault": columnDefault,
-		}
-
-		schemaDetails[columnName] = columnDetails
-	}
-
-	query := fmt.Sprintf(`
-		SELECT indexname, indexdef
-		FROM pg_indexes
-		WHERE tablename = '%s';
-	`, requestData.TableName)
-
-	rows, err = db.Query(query)
-	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		internals.InternalServerError(err, c, "Failed to fetch schema details")
 		return
 	}
 
-	indexes := make([]map[string]interface{}, 0)
-
-	for rows.Next() {
-		var indexName, indexDef string
-		err := rows.Scan(&indexName, &indexDef)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		indexDetails := map[string]interface{}{
-			"indexName": indexName,
-			"indexDef":  indexDef,
-		}
-		indexDefJson, err := internals.ConvertIndexDef(indexDef)
-		if err == nil {
-			indexDetails["indexAlgorithm"] = indexDefJson["indexAlgorithm"]
-			indexDetails["isUnique"] = indexDefJson["isUnique"]
-			indexDetails["columnName"] = indexDefJson["columnName"]
-		}
-
-		indexes = append(indexes, indexDetails)
-	}
-
-	query = fmt.Sprintf(`
-		SELECT
-			conname AS constraint_name,
-			conrelid::regclass AS table_name,
-			ta.attname AS column_name,
-			confrelid::regclass AS foreign_table_name,
-			fa.attname AS foreign_column_name
-		FROM (
-			SELECT
-				conname,
-				conrelid,
-				confrelid,
-				unnest(conkey) AS conkey,
-				unnest(confkey) AS confkey
-			FROM pg_constraint
-		) sub
-		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
-		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey
-	`)
-
-	rows, err = db.Query(query)
+	// Fetch index details
+	indexDetails, err := internals.FetchIndexDetails(db, requestData.TableName)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		internals.InternalServerError(err, c, "Failed to fetch index details")
 		return
 	}
 
-	var foriegnKeys []map[string]interface{}
-
-	for rows.Next() {
-		var (
-			constraintName    string
-			tableName         string
-			columnName        string
-			foreignTableName  string
-			foreignColumnName string
-		)
-
-		err := rows.Scan(&constraintName, &tableName, &columnName, &foreignTableName, &foreignColumnName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if tableName == requestData.TableName {
-			result := map[string]interface{}{
-				"constraint_name":     constraintName,
-				"table_name":          tableName,
-				"column_name":         columnName,
-				"foreign_table_name":  foreignTableName,
-				"foreign_column_name": foreignColumnName,
-			}
-			foriegnKeys = append(foriegnKeys, result)
-		}
-
+	// Fetch foreign key details
+	foreignKeyDetails, err := internals.FetchForeignKeyDetails(db, requestData.TableName)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to fetch foreign key details")
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Schema for " + requestData.TableName + " found", "schema": schemaDetails, "indexes": indexes, "foreignKeys": foriegnKeys})
-
+	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "schema": schemaDetails, "indexes": indexDetails, "foreignKeys": foreignKeyDetails})
 }
 
 func HandleTables(c *gin.Context) {
