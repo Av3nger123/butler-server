@@ -40,9 +40,9 @@ type QueryRequest struct {
 	Password  string `json:"password"`
 	Host      string `json:"host"`
 	Port      string `json:"port"`
-	DbName    string `json:"dbname"`
+	DbName    string `json:"database"`
 	Query     string `json:"query"`
-	TableName string `json:"tablename"`
+	TableName string `json:"table"`
 }
 
 func ConnectToDB(driverName, username, password, host, port, dbName string) (*sql.DB, error) {
@@ -320,9 +320,8 @@ func FetchForeignKeyDetails(db *sql.DB, schemaName string) ([]ForeignKeyDetails,
 			FROM pg_constraint
 		) sub
 		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
-		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey
-		WHERE conrelid = $1::regclass;`
-	rows, err := db.Query(query, schemaName)
+		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey;`
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
