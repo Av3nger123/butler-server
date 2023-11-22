@@ -13,7 +13,7 @@ var Db *sql.DB
 func InitPostgres() {
 
 	// PostgreSQL connection
-	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING"))
+	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}

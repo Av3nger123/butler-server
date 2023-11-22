@@ -6,9 +6,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 )
+
+type Result struct {
+	Details interface{}
+	Type    string
+	Error   error
+}
 
 func parseRequest(c *gin.Context) (*internals.QueryRequest, error) {
 	// var requestBody struct {
@@ -107,6 +114,11 @@ func HandleQuery(c *gin.Context) {
 }
 
 func HandleMetaData(c *gin.Context) {
+
+	var wg sync.WaitGroup
+	resultCh := make(chan Result, 3)
+	wg.Add(3)
+
 	requestData, err := parseRequest(c)
 	if err != nil {
 		internals.BadRequestError(err, c, "Failed to parse request body")
@@ -120,28 +132,49 @@ func HandleMetaData(c *gin.Context) {
 	}
 	defer db.Close()
 
-	// Fetch schema details
-	schemaDetails, err := internals.FetchSchemaDetails(db, requestData.TableName)
-	if err != nil {
-		internals.InternalServerError(err, c, "Failed to fetch schema details")
-		return
-	}
+	go func() {
+		defer wg.Done()
+		schemaDetails, err := internals.FetchSchemaDetails(db, requestData.TableName)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
+			return
+		}
+		resultCh <- Result{Details: schemaDetails, Error: nil, Type: "schema"}
+	}()
 
-	// Fetch index details
-	indexDetails, err := internals.FetchIndexDetails(db, requestData.TableName)
-	if err != nil {
-		internals.InternalServerError(err, c, "Failed to fetch index details")
-		return
-	}
+	go func() {
+		defer wg.Done()
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(db, requestData.TableName)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
+			return
+		}
+		resultCh <- Result{Details: foreignKeyDetails, Error: nil, Type: "foreign key"}
+	}()
 
-	// Fetch foreign key details
-	foreignKeyDetails, err := internals.FetchForeignKeyDetails(db, requestData.TableName)
-	if err != nil {
-		internals.InternalServerError(err, c, "Failed to fetch foreign key details")
-		return
-	}
+	go func() {
+		defer wg.Done()
+		indexDetails, err := internals.FetchIndexDetails(db, requestData.TableName)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "index"}
+			return
+		}
+		resultCh <- Result{Details: indexDetails, Error: nil, Type: "index"}
+	}()
 
-	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "schema": schemaDetails, "indexes": indexDetails, "foreignKeys": foreignKeyDetails})
+	wg.Wait()
+
+	results := make(map[string]interface{})
+
+	for i := 0; i < 3; i++ {
+		result := <-resultCh
+		if result.Error != nil {
+			internals.InternalServerError(result.Error, c, fmt.Sprintf("Failed to fetch %s details", result.Type))
+			return
+		}
+		results[strings.TrimSpace(result.Type)] = result.Details
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": results})
 }
 
 func HandleTables(c *gin.Context) {
@@ -243,6 +276,8 @@ func HandleData(c *gin.Context) {
 		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, order)
 	}
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
+
+	fmt.Println(query)
 
 	rows, err := db.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
