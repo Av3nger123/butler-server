@@ -106,7 +106,7 @@ func HandleQuery(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": result})
 }
 
-func HandleSchema(c *gin.Context) {
+func HandleMetaData(c *gin.Context) {
 	requestData, err := parseRequest(c)
 	if err != nil {
 		internals.BadRequestError(err, c, "Failed to parse request body")

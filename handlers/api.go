@@ -1,23 +1,40 @@
 package handlers
 
 import (
+	"butler-server/client"
 	"log"
 
 	"github.com/gin-gonic/gin"
 )
 
-func StartServer() {
+type HandlerContext struct {
+	DBClient    *client.Database
+	RedisClient *client.RedisClient
+}
+
+const HandlerContextKey = "HandlerContext"
+
+// NewHandlerContext creates a new HandlerContext instance
+func NewHandlerContext(dbClient *client.Database, redisClient *client.RedisClient) *HandlerContext {
+	return &HandlerContext{
+		DBClient:    dbClient,
+		RedisClient: redisClient,
+	}
+}
+
+func StartServer(dbClient *client.Database, redisClient *client.RedisClient, port string) {
 	r := gin.Default()
 
 	r.Use(corsMiddleware())
+	r.Use(setupHandlerContext(dbClient, redisClient))
 
 	r.POST("/query", HandleQuery)
 	r.POST("/databases", HandleDatabases)
 	r.POST("/tables", HandleTables)
-	r.POST("/schema", HandleSchema)
+	r.POST("/metadata", HandleMetaData)
 	r.POST("/data", HandleData)
 
-	log.Fatal(r.Run(":8080"))
+	log.Fatal(r.Run())
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -31,6 +48,14 @@ func corsMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		c.Next()
+	}
+}
+
+func setupHandlerContext(dbClient *client.Database, redisClient *client.RedisClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		context := NewHandlerContext(dbClient, redisClient)
+		c.Set(HandlerContextKey, context)
 		c.Next()
 	}
 }
