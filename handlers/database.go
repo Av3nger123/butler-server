@@ -3,10 +3,12 @@ package handlers
 import (
 	"butler-server/internals"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,6 +49,20 @@ func HandleDatabases(c *gin.Context) {
 		internals.BadRequestError(err, c, "Failed to parse request body")
 		return
 	}
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Handler context")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateDatabaseKey(string(requestData.Id))
+	result, err := ctx.RedisClient.GetMap(key)
+	if err != nil {
+		log.Printf("Cache hit miss for Database")
+	} else {
+		c.JSON(http.StatusOK, gin.H{"messages": "Databases found", "databases": result["databases"]})
+		return
+	}
 
 	db, err := internals.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, "")
 	if err != nil {
@@ -81,6 +97,9 @@ func HandleDatabases(c *gin.Context) {
 		}
 		databases = append(databases, dbName)
 	}
+	dbMap := make(map[string]interface{})
+	dbMap["databases"] = databases
+	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"messages": "Databases found", "databases": databases})
 }
 
@@ -115,15 +134,30 @@ func HandleQuery(c *gin.Context) {
 
 func HandleMetaData(c *gin.Context) {
 
-	var wg sync.WaitGroup
-	resultCh := make(chan Result, 3)
-	wg.Add(3)
-
 	requestData, err := parseRequest(c)
 	if err != nil {
 		internals.BadRequestError(err, c, "Failed to parse request body")
 		return
 	}
+
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Handler context")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateMetadataKey(string(requestData.Id), requestData.DbName, requestData.TableName)
+	result, err := ctx.RedisClient.GetMap(key)
+	if err != nil {
+		log.Printf("Cache hit miss for Metadata")
+	} else {
+		c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": result["metadata"]})
+		return
+	}
+
+	var wg sync.WaitGroup
+	resultCh := make(chan Result, 3)
+	wg.Add(3)
 
 	db, err := internals.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, requestData.DbName)
 	if err != nil {
@@ -172,15 +206,35 @@ func HandleMetaData(c *gin.Context) {
 			internals.InternalServerError(result.Error, c, fmt.Sprintf("Failed to fetch %s details", result.Type))
 			return
 		}
-		results[strings.TrimSpace(result.Type)] = result.Details
+		results[result.Type] = result.Details
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": results})
+	schemaDetails := internals.MergeMetaData(results["schema"].(map[string]internals.SchemaDetails), results["index"].([]internals.IndexDetails), results["foreign key"].([]internals.ForeignKeyDetails))
+
+	dbMap := make(map[string]interface{})
+	dbMap["metadata"] = schemaDetails
+	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
+	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": schemaDetails})
 }
 
 func HandleTables(c *gin.Context) {
 	requestData, err := parseRequest(c)
 	if err != nil {
 		internals.BadRequestError(err, c, "Failed to parse request body")
+		return
+	}
+
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Handler context")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateTablesKey(string(requestData.Id), requestData.DbName)
+	res, err := ctx.RedisClient.GetMap(key)
+	if err != nil {
+		log.Printf("Cache hit miss for Tables")
+	} else {
+		c.JSON(http.StatusOK, gin.H{"messages": "Tables found", "tables": res["tables"]})
 		return
 	}
 
@@ -208,6 +262,9 @@ func HandleTables(c *gin.Context) {
 		}
 		tables = append(tables, tableName)
 	}
+	dbMap := make(map[string]interface{})
+	dbMap["tables"] = tables
+	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"messages": "Tables found", "tables": tables})
 }
 

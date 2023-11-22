@@ -16,6 +16,9 @@ type SchemaDetails struct {
 	IsNullable    string         `json:"isNullable"`
 	Position      string         `json:"position"`
 	ColumnDefault sql.NullString `json:"columnDefault"`
+	Index         bool           `json:"index"`
+	IsPrimary     bool           `json:"isPrimary"`
+	ForeignKey    string         `json:"foreignKey"`
 }
 
 type IndexDetails struct {
@@ -35,6 +38,7 @@ type ForeignKeyDetails struct {
 }
 
 type QueryRequest struct {
+	Id        int8   `json:"id"`
 	Driver    string `json:"type"`
 	Username  string `json:"username"`
 	Password  string `json:"password"`
@@ -205,12 +209,12 @@ func ConstructCondition(column, operator, value string, whereClauses []string) s
 
 func ConvertIndexDef(sqlStatement string) (map[string]interface{}, error) {
 	// Define a regular expression pattern to extract relevant information
-	pattern := `CREATE\s+(UNIQUE)?\s+INDEX\s+(\w+)\s+ON\s+(\w+)\s+USING\s+(\w+)\s+\((\w+)\)`
+	pattern := `^CREATE\s+(\w+)\s+INDEX\s+(\w+)\s+ON\s+public\.(\w+)\s+USING\s+(\w+)\s+\((\w+)\)`
 
 	// Use regex to find matches in the SQL statement
 	re := regexp.MustCompile(pattern)
 	matches := re.FindStringSubmatch(sqlStatement)
-
+	fmt.Println(matches)
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("No match found in the SQL statement")
 	}
@@ -353,5 +357,23 @@ func FetchForeignKeyDetails(db *sql.DB, schemaName string) ([]ForeignKeyDetails,
 		}
 	}
 	return foreignKeys, nil
+}
 
+func MergeMetaData(schemaDetails map[string]SchemaDetails, indexDetails []IndexDetails, foreignKeyDetails []ForeignKeyDetails) map[string]SchemaDetails {
+	for i := 0; i < len(indexDetails); i++ {
+		indexDetail := indexDetails[i]
+		schema := schemaDetails[indexDetail.ColumnName]
+		if strings.Contains(indexDetail.IndexName, "pkey") {
+			schema.IsPrimary = true
+		}
+		schema.Index = true
+		schemaDetails[indexDetail.ColumnName] = schema
+	}
+	for i := 0; i < len(foreignKeyDetails); i++ {
+		foreignKeyDetail := foreignKeyDetails[i]
+		schema := schemaDetails[foreignKeyDetail.ColumnName]
+		schema.ForeignKey = fmt.Sprintf("%s.%s", foreignKeyDetail.ForeignTableName, foreignKeyDetail.ForeignColumnName)
+		schemaDetails[foreignKeyDetail.ColumnName] = schema
+	}
+	return schemaDetails
 }

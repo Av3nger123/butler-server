@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"butler-server/client"
+	"errors"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -58,4 +59,20 @@ func setupHandlerContext(dbClient *client.Database, redisClient *client.RedisCli
 		c.Set(HandlerContextKey, context)
 		c.Next()
 	}
+}
+
+func GetClientContext(c *gin.Context) (*HandlerContext, error) {
+	context, ok := c.Get(HandlerContextKey)
+
+	if !ok {
+		return nil, errors.New("failed to fetch handler context")
+
+	}
+
+	ctx, ok := context.(*HandlerContext)
+	if !ok {
+		return nil, errors.New("failed to fetch handler context")
+
+	}
+	return ctx, nil
 }
