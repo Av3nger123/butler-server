@@ -23,6 +23,9 @@ const (
 
 	// KeyPrefixMetadata is the prefix for metadata keys
 	KeyPrefixMetadata = "Metadata"
+
+	// KeyPrefixMetadata is the prefix for data keys
+	KeyPrefixData = "Data"
 )
 
 // NewRedisClient creates a new RedisClient instance
@@ -98,4 +101,8 @@ func (r *RedisClient) GenerateTablesKey(clusterID, databaseName string) string {
 
 func (r *RedisClient) GenerateMetadataKey(clusterID, databaseName, tableName string) string {
 	return fmt.Sprintf("%s:%s~%s~%s", KeyPrefixMetadata, clusterID, databaseName, tableName)
+}
+
+func (r *RedisClient) GenerateDataKey(clusterID, databaseName, tableName, query string) string {
+	return fmt.Sprintf("%s:%s~%s~%s~%s", KeyPrefixData, clusterID, databaseName, tableName, query)
 }

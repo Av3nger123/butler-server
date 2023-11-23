@@ -55,7 +55,7 @@ func HandleDatabases(c *gin.Context) {
 		return
 	}
 
-	key := ctx.RedisClient.GenerateDatabaseKey(string(requestData.Id))
+	key := ctx.RedisClient.GenerateDatabaseKey(fmt.Sprintf("%d", requestData.Id))
 	result, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Database")
@@ -124,7 +124,7 @@ func HandleQuery(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	result, err := internals.ParseRows(rows)
+	result, _, err := internals.ParseRows(rows)
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to parse rows")
 		return
@@ -270,6 +270,35 @@ func HandleTables(c *gin.Context) {
 
 func HandleData(c *gin.Context) {
 
+	requestData, err := parseRequest(c)
+	if err != nil {
+		internals.BadRequestError(err, c, "Failed to parse request body")
+		return
+	}
+
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Handler context")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateDataKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName, requestData.TableName, c.Request.URL.RawQuery)
+	fmt.Println(key)
+	res, err := ctx.RedisClient.GetMap(key)
+	if err != nil {
+		log.Printf("Cache hit miss for data")
+	} else {
+		c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": res["data"], "count": res["count"]})
+		return
+	}
+
+	db, err := internals.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, requestData.DbName)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		return
+	}
+	defer db.Close()
+
 	pageStr := c.DefaultQuery("page", "0")
 	sizeStr := c.DefaultQuery("size", "50")
 	sortBy := c.Query("sort")
@@ -299,22 +328,9 @@ func HandleData(c *gin.Context) {
 
 	offset := (page) * size
 
-	requestData, err := parseRequest(c)
-	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
-		return
-	}
-
-	db, err := internals.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, requestData.DbName)
-	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
-		return
-	}
-	defer db.Close()
-
 	filterMap := internals.ParseFilterParam(filterParam)
 
-	query := fmt.Sprintf("SELECT * FROM %s", requestData.TableName)
+	query := fmt.Sprintf("SELECT *, COUNT(*) OVER() as total_count FROM %s", requestData.TableName)
 	if filterOperator == "and" {
 		filterOperator = "AND"
 	} else if filterOperator == "or" {
@@ -343,10 +359,15 @@ func HandleData(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	result, err := internals.ParseRows(rows)
+	result, count, err := internals.ParseRows(rows)
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to parse rows")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result})
+
+	dbMap := make(map[string]interface{})
+	dbMap["data"] = result
+	dbMap["count"] = count
+	ctx.RedisClient.SetMap(key, dbMap, time.Duration(time.Hour))
+	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": result, "count": count})
 }

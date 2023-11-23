@@ -113,11 +113,12 @@ func ParseFilterParam(filterParam string) map[string]string {
 	return filterMap
 }
 
-func ParseRows(rows *sql.Rows) ([]map[string]interface{}, error) {
+func ParseRows(rows *sql.Rows) ([]map[string]interface{}, interface{}, error) {
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	var totalCount interface{}
 	var result []map[string]interface{}
 	values := make([]interface{}, len(columns))
 	for rows.Next() {
@@ -127,15 +128,19 @@ func ParseRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 		}
 		err := rows.Scan(values...)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rowData := make(map[string]interface{})
 		for i, column := range columns {
-			rowData[column] = *values[i].(*interface{})
+			if column != "total_count" {
+				rowData[column] = *values[i].(*interface{})
+			} else {
+				totalCount = *values[i].(*interface{})
+			}
 		}
 		result = append(result, rowData)
 	}
-	return result, err
+	return result, totalCount, err
 }
 
 func FilterValues(filters map[string]string) []interface{} {
