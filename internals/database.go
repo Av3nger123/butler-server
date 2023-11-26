@@ -101,7 +101,7 @@ func ExecuteQuery(db *sql.DB, query string) (*sql.Rows, error) {
 func ParseFilterParam(filterParam string) map[string]string {
 	filterMap := make(map[string]string)
 	if filterParam != "" {
-		filters := strings.Split(filterParam, ",")
+		filters := strings.Split(filterParam, "|")
 		for _, pair := range filters {
 
 			filter := strings.Split(pair, ":")
