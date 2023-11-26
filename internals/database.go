@@ -103,10 +103,9 @@ func ParseFilterParam(filterParam string) map[string]string {
 	if filterParam != "" {
 		filters := strings.Split(filterParam, "|")
 		for _, pair := range filters {
-
 			filter := strings.Split(pair, ":")
-			if len(filter) == 2 {
-				filterMap[filter[0]] = filter[1]
+			if len(filter) == 3 {
+				filterMap[filter[0]] = strings.Join(filter[1:3], ":")
 			}
 		}
 	}

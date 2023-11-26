@@ -146,7 +146,7 @@ func HandleMetaData(c *gin.Context) {
 		return
 	}
 
-	key := ctx.RedisClient.GenerateMetadataKey(string(requestData.Id), requestData.DbName, requestData.TableName)
+	key := ctx.RedisClient.GenerateMetadataKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName, requestData.TableName)
 	result, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Metadata")
@@ -229,7 +229,7 @@ func HandleTables(c *gin.Context) {
 		return
 	}
 
-	key := ctx.RedisClient.GenerateTablesKey(string(requestData.Id), requestData.DbName)
+	key := ctx.RedisClient.GenerateTablesKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName)
 	res, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Tables")
@@ -343,7 +343,11 @@ func HandleData(c *gin.Context) {
 			operator, conditionValue := internals.ParseOperatorAndValue(value)
 			whereClauses = append(whereClauses, internals.ConstructCondition(key, operator, conditionValue, whereClauses))
 		}
-		query += " WHERE " + strings.Join(whereClauses, " "+filterOperator+" ")
+		if filterOperator != "" {
+			query += " WHERE " + strings.Join(whereClauses, " "+filterOperator+" ")
+		} else {
+			query += " WHERE " + whereClauses[0]
+		}
 	}
 	if sortBy != "" {
 		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, order)
