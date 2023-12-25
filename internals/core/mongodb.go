@@ -1,9 +1,11 @@
 package core
 
 import (
+	"butler-server/internals"
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -57,21 +59,21 @@ func (m *MongoDBDatabase) Tables() ([]string, error) {
 	return collections, nil
 }
 
-func (m *MongoDBDatabase) Metadata() (map[string]interface{}, error) {
+func (m *MongoDBDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	return nil, nil
 }
 
 func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
-	filterBson, err := ParseMongoDBFilters(filter.filter)
+	filterBson, err := parseMongoDBFilters(filter.filter)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the sort parameter into a BSON sort
-	sortBson := ParseMongoDBSort(filter.sort, filter.order)
+	// parse the sort parameter into a BSON sort
+	sortBson := parseMongoDBSort(filter.sort, filter.order)
 
 	// Set up options for pagination
-	skip, limit := ParseMongoDBPagination(filter.page, filter.size)
+	skip, limit := parseMongoDBPagination(filter.page, filter.size)
 	options := options.Find().SetSkip(skip).SetLimit(limit).SetSort(sortBson)
 
 	// Perform the MongoDB find operation
@@ -118,7 +120,7 @@ func (m *MongoDBDatabase) Close() error {
 	return nil
 }
 
-func ParseMongoDBFilters(filters string) (bson.D, error) {
+func parseMongoDBFilters(filters string) (bson.D, error) {
 	if filters == "" {
 		return bson.D{}, nil
 	}
@@ -129,7 +131,7 @@ func ParseMongoDBFilters(filters string) (bson.D, error) {
 	// Create an array to store individual BSON filters
 	var bsonFilters []bson.D
 
-	// Parse each filter string and convert it to BSON filter
+	// parse each filter string and convert it to BSON filter
 	for _, filterStr := range filterStrings {
 		bsonFilter, err := parseSingleMongoDBFilter(filterStr)
 		if err != nil {
@@ -192,7 +194,7 @@ func parseSingleMongoDBFilter(filter string) (bson.D, error) {
 	return bsonFilter, nil
 }
 
-func ParseMongoDBSort(sort, order string) bson.D {
+func parseMongoDBSort(sort, order string) bson.D {
 	if sort == "" {
 		return bson.D{}
 	}
@@ -205,17 +207,16 @@ func ParseMongoDBSort(sort, order string) bson.D {
 	return bson.D{{Key: sort, Value: orderValue}}
 }
 
-// ParseMongoDBPagination function to convert page and size strings to skip and limit
-func ParseMongoDBPagination(page, size string) (int64, int64) {
+func parseMongoDBPagination(page, size string) (int64, int64) {
 	pageNum := 0
 	sizeNum := 10
 
 	if page != "" {
-		pageNum = 0
+		pageNum, _ = strconv.Atoi(page)
 	}
 
 	if size != "" {
-		sizeNum = 10
+		sizeNum, _ = strconv.Atoi(size)
 	}
 
 	skip := int64((pageNum) * sizeNum)

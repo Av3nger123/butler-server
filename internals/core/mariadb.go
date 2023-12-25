@@ -4,6 +4,7 @@ import (
 	"butler-server/internals"
 	"database/sql"
 	"fmt"
+	"sync"
 )
 
 type MariaDatabase struct {
@@ -71,8 +72,87 @@ func (m *MariaDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (m *MariaDatabase) Metadata() (map[string]interface{}, error) {
-	return nil, nil
+func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+	resultCh := make(chan Result, 3)
+	var wg sync.WaitGroup
+
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT 
+			column_name, 
+			data_type, 
+			character_maximum_length, 
+			is_nullable, 
+			column_default, 
+			udt_name AS data_type_name, 
+			ordinal_position
+		FROM information_schema.COLUMNS
+		WHERE table_name = ?;`
+		schemaDetails, err := internals.FetchSchemaDetails(m.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
+			return
+		}
+		resultCh <- Result{Details: schemaDetails, Error: nil, Type: "schema"}
+	}()
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT
+			tc.CONSTRAINT_NAME AS constraint_name,
+			tc.TABLE_NAME AS table_name,
+			kcu.COLUMN_NAME AS column_name,
+			ccu.TABLE_NAME AS foreign_table_name,
+			ccu.COLUMN_NAME AS foreign_column_name
+		FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS tc
+		JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS kcu
+			ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+			AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+		JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+		
+		AS rc
+			ON tc.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+			AND tc.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+		JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS ccu
+			ON rc.UNIQUE_CONSTRAINT_NAME = ccu.CONSTRAINT_NAME
+			AND rc.CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA
+		WHERE tc.CONSTRAINT_TYPE = 'FOREIGN KEY';`
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(m.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
+			return
+		}
+		resultCh <- Result{Details: foreignKeyDetails, Error: nil, Type: "foreign key"}
+	}()
+
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT index_name AS indexname, index_definition AS indexdef
+		FROM information_schema.STATISTICS
+		WHERE table_name = ?;`
+		indexDetails, err := internals.FetchIndexDetails(m.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "index"}
+			return
+		}
+		resultCh <- Result{Details: indexDetails, Error: nil, Type: "index"}
+	}()
+
+	wg.Wait()
+
+	results := make(map[string]interface{})
+
+	for i := 0; i < 3; i++ {
+		result := <-resultCh
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		results[result.Type] = result.Details
+	}
+	schemaDetails := internals.MergeMetaData(results["schema"].(map[string]internals.SchemaDetails), results["index"].([]internals.IndexDetails), results["foreign key"].([]internals.ForeignKeyDetails))
+	return schemaDetails, nil
 }
 
 func (m *MariaDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {

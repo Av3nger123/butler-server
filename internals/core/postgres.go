@@ -4,6 +4,7 @@ import (
 	"butler-server/internals"
 	"database/sql"
 	"fmt"
+	"sync"
 )
 
 type PostgreSQLDatabase struct {
@@ -72,8 +73,78 @@ func (m *PostgreSQLDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (m *PostgreSQLDatabase) Metadata() (map[string]interface{}, error) {
-	return nil, nil
+func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+	resultCh := make(chan Result, 3)
+	var wg sync.WaitGroup
+
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position 
+		FROM information_schema.columns 
+		WHERE table_name = $1;`
+		schemaDetails, err := internals.FetchSchemaDetails(p.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
+			return
+		}
+		resultCh <- Result{Details: schemaDetails, Error: nil, Type: "schema"}
+	}()
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT
+			conname AS constraint_name,
+			conrelid::regclass AS table_name,
+			ta.attname AS column_name,
+			confrelid::regclass AS foreign_table_name,
+			fa.attname AS foreign_column_name
+		FROM (
+			SELECT
+				conname,
+				conrelid,
+				confrelid,
+				unnest(conkey) AS conkey,
+				unnest(confkey) AS confkey
+			FROM pg_constraint
+		) sub
+		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
+		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey;`
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(p.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
+			return
+		}
+		resultCh <- Result{Details: foreignKeyDetails, Error: nil, Type: "foreign key"}
+	}()
+
+	go func() {
+		defer wg.Done()
+		query := `
+		SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE tablename = $1;`
+		indexDetails, err := internals.FetchIndexDetails(p.conn, query, table)
+		if err != nil {
+			resultCh <- Result{Details: nil, Error: err, Type: "index"}
+			return
+		}
+		resultCh <- Result{Details: indexDetails, Error: nil, Type: "index"}
+	}()
+
+	wg.Wait()
+
+	results := make(map[string]interface{})
+
+	for i := 0; i < 3; i++ {
+		result := <-resultCh
+		if result.Error != nil {
+			return nil, result.Error
+		}
+		results[result.Type] = result.Details
+	}
+	schemaDetails := internals.MergeMetaData(results["schema"].(map[string]internals.SchemaDetails), results["index"].([]internals.IndexDetails), results["foreign key"].([]internals.ForeignKeyDetails))
+	return schemaDetails, nil
 }
 
 func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {

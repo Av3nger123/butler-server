@@ -13,8 +13,14 @@ type Database interface {
 	Close() error
 	Databases() ([]string, error)
 	Tables() ([]string, error)
-	Metadata() (map[string]interface{}, error)
+	Metadata(table string) (map[string]internals.SchemaDetails, error)
 	Data(table string, filter Filter) (map[string]interface{}, error)
+}
+
+type Result struct {
+	Details interface{}
+	Type    string
+	Error   error
 }
 
 type DatabaseConfig struct {

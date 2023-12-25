@@ -168,7 +168,7 @@ func HandleMetaData(c *gin.Context) {
 
 	go func() {
 		defer wg.Done()
-		schemaDetails, err := internals.FetchSchemaDetails(db, requestData.TableName)
+		schemaDetails, err := internals.FetchSchemaDetails(db, ``, requestData.TableName)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -178,7 +178,7 @@ func HandleMetaData(c *gin.Context) {
 
 	go func() {
 		defer wg.Done()
-		foreignKeyDetails, err := internals.FetchForeignKeyDetails(db, requestData.TableName)
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(db, ``, requestData.TableName)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
 			return
@@ -188,7 +188,7 @@ func HandleMetaData(c *gin.Context) {
 
 	go func() {
 		defer wg.Done()
-		indexDetails, err := internals.FetchIndexDetails(db, requestData.TableName)
+		indexDetails, err := internals.FetchIndexDetails(db, ``, requestData.TableName)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
