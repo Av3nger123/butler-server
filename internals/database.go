@@ -43,7 +43,7 @@ type QueryRequest struct {
 	Username  string `json:"username"`
 	Password  string `json:"password"`
 	Host      string `json:"host"`
-	Port      string `json:"port"`
+	Port      int    `json:"port"`
 	DbName    string `json:"database"`
 	Query     string `json:"query"`
 	TableName string `json:"table"`

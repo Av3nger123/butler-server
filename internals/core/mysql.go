@@ -158,7 +158,7 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 
 func (m *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
-	filterMap := internals.ParseFilterParam(filter.filter)
+	filterMap := internals.ParseFilterParam(filter.Filter)
 	query, err := ParseSQLQuery(table, filter, filterMap)
 	if err != nil {
 		return nil, err

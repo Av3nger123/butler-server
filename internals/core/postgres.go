@@ -149,7 +149,7 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 
 func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
-	filterMap := internals.ParseFilterParam(filter.filter)
+	filterMap := internals.ParseFilterParam(filter.Filter)
 	query, err := ParseSQLQuery(table, filter, filterMap)
 	if err != nil {
 		return nil, err

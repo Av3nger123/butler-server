@@ -33,12 +33,12 @@ type DatabaseConfig struct {
 }
 
 type Filter struct {
-	page     string
-	size     string
-	sort     string
-	order    string
-	filter   string
-	operator string
+	Page     string
+	Size     string
+	Sort     string
+	Order    string
+	Filter   string
+	Operator string
 }
 
 func NewDatabase(config DatabaseConfig) (Database, error) {
@@ -59,24 +59,24 @@ func NewDatabase(config DatabaseConfig) (Database, error) {
 }
 
 func ParseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {
-	page, err := strconv.Atoi(filter.page)
+	page, err := strconv.Atoi(filter.Page)
 	if err != nil {
 		return "", nil
 	}
-	size, err := strconv.Atoi(filter.size)
+	size, err := strconv.Atoi(filter.Size)
 	if err != nil {
 		return "", nil
 	}
-	if filter.order != "asc" && filter.order != "desc" {
+	if filter.Order != "asc" && filter.Order != "desc" {
 		return "", fmt.Errorf("invalid order parameter")
 	}
 	offset := (page) * size
 
 	query := fmt.Sprintf("SELECT *, COUNT(*) OVER() as total_count FROM %s", table)
 	var operator string
-	if filter.operator == "and" {
+	if filter.Operator == "and" {
 		operator = "AND"
-	} else if filter.operator == "or" {
+	} else if filter.Operator == "or" {
 		operator = "OR"
 	}
 
@@ -92,8 +92,8 @@ func ParseSQLQuery(table string, filter Filter, filterMap map[string]string) (st
 			query += " WHERE " + whereClauses[0]
 		}
 	}
-	if filter.sort != "" {
-		query += fmt.Sprintf(" ORDER BY %s %s", filter.sort, filter.order)
+	if filter.Sort != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", filter.Sort, filter.Order)
 	}
 	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
 

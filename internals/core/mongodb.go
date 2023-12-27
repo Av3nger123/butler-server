@@ -64,16 +64,16 @@ func (m *MongoDBDatabase) Metadata(table string) (map[string]internals.SchemaDet
 }
 
 func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
-	filterBson, err := parseMongoDBFilters(filter.filter)
+	filterBson, err := parseMongoDBFilters(filter.Filter)
 	if err != nil {
 		return nil, err
 	}
 
 	// parse the sort parameter into a BSON sort
-	sortBson := parseMongoDBSort(filter.sort, filter.order)
+	sortBson := parseMongoDBSort(filter.Sort, filter.Order)
 
 	// Set up options for pagination
-	skip, limit := parseMongoDBPagination(filter.page, filter.size)
+	skip, limit := parseMongoDBPagination(filter.Page, filter.Size)
 	options := options.Find().SetSkip(skip).SetLimit(limit).SetSort(sortBson)
 
 	// Perform the MongoDB find operation
