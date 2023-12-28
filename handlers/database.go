@@ -69,6 +69,10 @@ func HandleDatabases(c *gin.Context) {
 		Password: requestData.Password,
 	})
 	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
 		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
@@ -113,8 +117,13 @@ func HandleTables(c *gin.Context) {
 		Port:     requestData.Port,
 		Username: requestData.Username,
 		Password: requestData.Password,
+		Database: requestData.DbName,
 	})
 	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
 		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
@@ -189,8 +198,13 @@ func HandleMetaData(c *gin.Context) {
 		Port:     requestData.Port,
 		Username: requestData.Username,
 		Password: requestData.Password,
+		Database: requestData.DbName,
 	})
 	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
 		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
@@ -236,8 +250,13 @@ func HandleData(c *gin.Context) {
 		Port:     requestData.Port,
 		Username: requestData.Username,
 		Password: requestData.Password,
+		Database: requestData.DbName,
 	})
 	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
 		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}

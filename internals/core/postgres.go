@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+
+	_ "github.com/lib/pq"
 )
 
 type PostgreSQLDatabase struct {
@@ -14,13 +16,12 @@ type PostgreSQLDatabase struct {
 
 func (p *PostgreSQLDatabase) Connect() error {
 
-	connectionString := fmt.Sprintf("host=%s port=%d user=%s password=%s ",
-		p.config.Hostname, p.config.Port, p.config.Username, p.config.Password)
+	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d",
+		p.config.Username, p.config.Password, p.config.Hostname, p.config.Port)
 	if p.config.Database != "" {
-		connectionString += "dbname=" + p.config.Database
+		connectionString += "/" + p.config.Database
 	}
-	connectionString += " sslmode=disable"
-
+	connectionString += "?sslmode=disable"
 	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		return err
@@ -76,7 +77,7 @@ func (m *PostgreSQLDatabase) Tables() ([]string, error) {
 func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
-
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		query := `

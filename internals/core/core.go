@@ -47,7 +47,7 @@ func NewDatabase(config DatabaseConfig) (Database, error) {
 		return &MySQLDatabase{config: config}, nil
 	case "mssql":
 		return &MsSQLDatabase{config: config}, nil
-	case "postgresql":
+	case "postgres":
 		return &PostgreSQLDatabase{config: config}, nil
 	case "mariadb":
 		return &MariaDatabase{config: config}, nil
