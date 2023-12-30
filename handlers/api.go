@@ -34,6 +34,7 @@ func StartServer(dbClient *client.Database, redisClient *client.RedisClient, por
 	r.POST("/tables", HandleTables)
 	r.POST("/metadata", HandleMetaData)
 	r.POST("/data", HandleData)
+	r.POST("/ping", HandlePing)
 
 	log.Fatal(r.Run())
 }

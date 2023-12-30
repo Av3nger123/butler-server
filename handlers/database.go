@@ -282,5 +282,33 @@ func HandleData(c *gin.Context) {
 		return
 	}
 	ctx.RedisClient.SetMap(key, dbMap, time.Duration(time.Hour))
-	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": dbMap["result"], "count": dbMap["count"]})
+	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": dbMap["data"], "count": dbMap["count"]})
+}
+
+func HandlePing(c *gin.Context) {
+	requestData, err := parseRequest(c)
+	if err != nil {
+		internals.BadRequestError(err, c, "Failed to parse request body")
+		return
+	}
+
+	db, err := core.NewDatabase(core.DatabaseConfig{
+		Driver:   requestData.Driver,
+		Hostname: requestData.Host,
+		Port:     requestData.Port,
+		Username: requestData.Username,
+		Password: requestData.Password,
+		Database: requestData.DbName,
+	})
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
+		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		return
+	}
+	defer db.Close()
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Database server connected"})
 }

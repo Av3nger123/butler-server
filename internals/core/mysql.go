@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type MySQLDatabase struct {
@@ -13,12 +15,12 @@ type MySQLDatabase struct {
 }
 
 func (m *MySQLDatabase) Connect() error {
-	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%d)",
+	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%d)/",
 		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
 	if m.config.Database != "" {
-		connectionString += "/" + m.config.Database
+		connectionString += m.config.Database
 	}
-
+	fmt.Println(connectionString)
 	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
 		return err
