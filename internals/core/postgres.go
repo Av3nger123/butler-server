@@ -15,14 +15,15 @@ type PostgreSQLDatabase struct {
 }
 
 func (p *PostgreSQLDatabase) Connect() error {
-
-	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d",
-		p.config.Username, p.config.Password, p.config.Hostname, p.config.Port)
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s", p.config.Hostname, p.config.Port, p.config.Username, p.config.Password)
 	if p.config.Database != "" {
-		connectionString += "/" + p.config.Database
+		connStr += " dbname=" + p.config.Database
+	} else {
+		connStr += " dbname=postgres"
 	}
-	connectionString += "?sslmode=disable"
-	db, err := sql.Open("postgres", connectionString)
+	connStr += " sslmode=disable"
+	fmt.Println(connStr)
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return err
 	}
