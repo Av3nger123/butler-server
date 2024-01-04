@@ -72,7 +72,7 @@ func ParseSQLQuery(table string, filter Filter, filterMap map[string]string) (st
 	}
 	offset := (page) * size
 
-	query := fmt.Sprintf("SELECT *, COUNT(*) OVER() as total_count FROM %s", table)
+	query := fmt.Sprintf(`SELECT *, COUNT(*) OVER() as total_count FROM "%s"`, table)
 	var operator string
 	if filter.Operator == "and" {
 		operator = "AND"
