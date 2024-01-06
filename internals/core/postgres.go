@@ -84,7 +84,7 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 		query := `
 		SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position 
 		FROM information_schema.columns 
-		WHERE table_name = "$1";`
+		WHERE table_name = $1;`
 		schemaDetails, err := internals.FetchSchemaDetails(p.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
