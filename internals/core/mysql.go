@@ -4,6 +4,8 @@ import (
 	"butler-server/internals"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -20,7 +22,6 @@ func (m *MySQLDatabase) Connect() error {
 	if m.config.Database != "" {
 		connectionString += m.config.Database
 	}
-	fmt.Println(connectionString)
 	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
 		return err
@@ -78,20 +79,11 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
 
+	wg.Add(3)
+
 	go func() {
 		defer wg.Done()
-		query := `
-		SELECT 
-			column_name, 
-			data_type, 
-			character_maximum_length, 
-			is_nullable, 
-			column_default, 
-			udt_name AS data_type_name, 
-			ordinal_position
-		FROM information_schema.COLUMNS
-		WHERE table_name = ? AND table_schema = DATABASE();`
-		schemaDetails, err := internals.FetchSchemaDetails(m.conn, query, table)
+		schemaDetails, err := m.fetchSchemaDetails(table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -100,47 +92,22 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	}()
 	go func() {
 		defer wg.Done()
-		query := `
-		SELECT
-			tc.CONSTRAINT_NAME AS constraint_name,
-			tc.TABLE_NAME AS table_name,
-			kcu.COLUMN_NAME AS column_name,
-			ccu.TABLE_NAME AS foreign_table_name,
-			ccu.COLUMN_NAME AS foreign_column_name
-		FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS tc
-		JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS kcu
-			ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-			AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
-		JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-		
-		AS rc
-			ON tc.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
-			AND tc.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
-		JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE AS ccu
-			ON rc.UNIQUE_CONSTRAINT_NAME = ccu.CONSTRAINT_NAME
-			AND rc.CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA
-		WHERE tc.CONSTRAINT_TYPE = 'FOREIGN KEY'
-			AND tc.TABLE_SCHEMA = DATABASE();`
-		foreignKeyDetails, err := internals.FetchForeignKeyDetails(m.conn, query, table)
+		foreignKeyDetails, err := m.fetchForeignKeyDetails(table)
 		if err != nil {
-			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
+			resultCh <- Result{Details: nil, Error: err, Type: "fk"}
 			return
 		}
-		resultCh <- Result{Details: foreignKeyDetails, Error: nil, Type: "foreign key"}
+		resultCh <- Result{Details: foreignKeyDetails, Error: nil, Type: "fk"}
 	}()
 
 	go func() {
 		defer wg.Done()
-		query := `
-		SELECT index_name AS indexname, index_definition AS indexdef
-		FROM information_schema.STATISTICS
-		WHERE table_name = ? AND table_schema = DATABASE();`
-		indexDetails, err := internals.FetchIndexDetails(m.conn, query, table)
+		indexes, err := m.fetchIndexDetails(table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
 		}
-		resultCh <- Result{Details: indexDetails, Error: nil, Type: "index"}
+		resultCh <- Result{Details: indexes, Error: nil, Type: "index"}
 	}()
 
 	wg.Wait()
@@ -154,14 +121,14 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 		}
 		results[result.Type] = result.Details
 	}
-	schemaDetails := internals.MergeMetaData(results["schema"].(map[string]internals.SchemaDetails), results["index"].([]internals.IndexDetails), results["foreign key"].([]internals.ForeignKeyDetails))
+	schemaDetails := internals.MergeMetaData(results["schema"].(map[string]internals.SchemaDetails), results["index"].([]internals.IndexDetails), results["fk"].([]internals.ForeignKeyDetails))
 	return schemaDetails, nil
 }
 
 func (m *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
 	filterMap := internals.ParseFilterParam(filter.Filter)
-	query, err := ParseSQLQuery(table, filter, filterMap)
+	query, err := m.parseSQLQuery(table, filter, filterMap)
 	if err != nil {
 		return nil, err
 	}
@@ -195,4 +162,158 @@ func (m *MySQLDatabase) Close() error {
 		fmt.Println("Closed MySQL database connection")
 	}
 	return nil
+}
+
+func (m *MySQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {
+	page, err := strconv.Atoi(filter.Page)
+	if err != nil {
+		return "", nil
+	}
+	size, err := strconv.Atoi(filter.Size)
+	if err != nil {
+		return "", nil
+	}
+	if filter.Order != "asc" && filter.Order != "desc" {
+		return "", fmt.Errorf("invalid order parameter")
+	}
+	offset := (page) * size
+
+	query := fmt.Sprintf(`SELECT *, (SELECT COUNT(*) FROM %s) as total_count FROM %s`, table, table)
+	var operator string
+	if filter.Operator == "and" {
+		operator = "AND"
+	} else if filter.Operator == "or" {
+		operator = "OR"
+	}
+
+	if len(filterMap) > 0 {
+		whereClauses := make([]string, 0)
+		for key, value := range filterMap {
+			operator, conditionValue := internals.ParseOperatorAndValue(value)
+			whereClauses = append(whereClauses, internals.ConstructCondition(key, operator, conditionValue, whereClauses))
+		}
+		if operator != "" {
+			query += " WHERE " + strings.Join(whereClauses, " "+operator+" ")
+		} else {
+			query += " WHERE " + whereClauses[0]
+		}
+	}
+	if filter.Sort != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", filter.Sort, filter.Order)
+	}
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
+
+	return query, nil
+}
+
+func (m *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.SchemaDetails, error) {
+	fmt.Println(table)
+	query := fmt.Sprintf(`
+		SELECT ordinal_position as ordinal_position,
+			column_name as column_name,
+			column_type AS data_type,
+			is_nullable as is_nullable,
+			column_default as column_default
+		FROM information_schema.columns
+		WHERE table_schema='%s' AND table_name='%s';
+	`, m.config.Database, table)
+	rows, err := m.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	schemaDetails := make(map[string]internals.SchemaDetails)
+	for rows.Next() {
+		var columnName, dataType, isNullable, ordinalPosition string
+		var columnDefault sql.NullString
+
+		err := rows.Scan(&ordinalPosition, &columnName, &dataType, &isNullable, &columnDefault)
+		if err != nil {
+			return nil, err
+		}
+		columnDetails := internals.SchemaDetails{
+			DataType:      dataType,
+			IsNullable:    isNullable,
+			Position:      ordinalPosition,
+			ColumnDefault: columnDefault,
+		}
+		schemaDetails[columnName] = columnDetails
+	}
+
+	return schemaDetails, nil
+}
+
+func (m *MySQLDatabase) fetchIndexDetails(table string) ([]internals.IndexDetails, error) {
+	query := fmt.Sprintf(`
+		SELECT index_name as index_name, index_type AS index_algorithm,
+		CASE non_unique WHEN 0 THEN'TRUE'ELSE'FALSE'END AS is_unique,
+		column_name as column_name FROM information_schema.statistics 
+		WHERE table_schema='%s' AND table_name='%s' ORDER BY seq_in_index ASC;
+	`, m.config.Database, table)
+	rows, err := m.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []internals.IndexDetails
+	for rows.Next() {
+		var indexName, unique, indexAlgorithm, columnName string
+		err := rows.Scan(&indexName, &indexAlgorithm, &unique, &columnName)
+		if err != nil {
+			return nil, err
+		}
+		isUnique := false
+		if unique == "TRUE" {
+			isUnique = true
+		}
+		indexDetails := internals.IndexDetails{
+			IndexName:      indexName,
+			IndexAlgorithm: indexAlgorithm,
+			IsUnique:       isUnique,
+			ColumnName:     columnName,
+		}
+
+		indexes = append(indexes, indexDetails)
+	}
+
+	return indexes, nil
+}
+
+func (m *MySQLDatabase) fetchForeignKeyDetails(table string) ([]internals.ForeignKeyDetails, error) {
+	query := fmt.Sprintf(`
+		SELECT constraint_name,referenced_table_name,referenced_column_name,
+		column_name FROM information_schema.key_column_usage WHERE 
+		table_name='%s' AND table_schema='%s' AND referenced_column_name is not NULL;
+	`, table, m.config.Database)
+	rows, err := m.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var foreignKeys []internals.ForeignKeyDetails
+	for rows.Next() {
+		var (
+			constraintName    string
+			columnName        string
+			foreignTableName  string
+			foreignColumnName string
+		)
+
+		err := rows.Scan(&constraintName, &foreignTableName, &foreignColumnName, &columnName)
+		if err != nil {
+			return nil, err
+		}
+		result := internals.ForeignKeyDetails{
+			ConstraintName:    constraintName,
+			TableName:         table,
+			ColumnName:        columnName,
+			ForeignTableName:  foreignTableName,
+			ForeignColumnName: foreignColumnName,
+		}
+		foreignKeys = append(foreignKeys, result)
+	}
+	return foreignKeys, nil
 }

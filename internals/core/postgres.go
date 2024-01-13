@@ -4,6 +4,8 @@ import (
 	"butler-server/internals"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	_ "github.com/lib/pq"
@@ -22,7 +24,6 @@ func (p *PostgreSQLDatabase) Connect() error {
 		connStr += " dbname=postgres"
 	}
 	connStr += " sslmode=disable"
-	fmt.Println(connStr)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return err
@@ -152,11 +153,10 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
 	filterMap := internals.ParseFilterParam(filter.Filter)
-	query, err := ParseSQLQuery(table, filter, filterMap)
+	query, err := m.parseSQLQuery(table, filter, filterMap)
 	if err != nil {
 		return nil, err
 	}
-
 	rows, err := m.conn.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
 		return nil, err
@@ -176,6 +176,48 @@ func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]inter
 
 func (p *PostgreSQLDatabase) Query() ([]interface{}, error) {
 	return nil, nil
+}
+
+func (m *PostgreSQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {
+	page, err := strconv.Atoi(filter.Page)
+	if err != nil {
+		return "", nil
+	}
+	size, err := strconv.Atoi(filter.Size)
+	if err != nil {
+		return "", nil
+	}
+	if filter.Order != "asc" && filter.Order != "desc" {
+		return "", fmt.Errorf("invalid order parameter")
+	}
+	offset := (page) * size
+
+	query := fmt.Sprintf(`SELECT *, COUNT(*) OVER() as total_count FROM "%s"`, table)
+	var operator string
+	if filter.Operator == "and" {
+		operator = "AND"
+	} else if filter.Operator == "or" {
+		operator = "OR"
+	}
+
+	if len(filterMap) > 0 {
+		whereClauses := make([]string, 0)
+		for key, value := range filterMap {
+			operator, conditionValue := internals.ParseOperatorAndValue(value)
+			whereClauses = append(whereClauses, internals.ConstructCondition(key, operator, conditionValue, whereClauses))
+		}
+		if operator != "" {
+			query += " WHERE " + strings.Join(whereClauses, " "+operator+" ")
+		} else {
+			query += " WHERE " + whereClauses[0]
+		}
+	}
+	if filter.Sort != "" {
+		query += fmt.Sprintf(" ORDER BY %s %s", filter.Sort, filter.Order)
+	}
+	query += fmt.Sprintf(" LIMIT %d OFFSET %d;", size, offset)
+
+	return query, nil
 }
 
 func (p *PostgreSQLDatabase) Close() error {

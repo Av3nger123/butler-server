@@ -1,8 +1,8 @@
 build:
-	go build -o butler-server ./cmd/
+	go build -o ./target/butler-server ./cmd/
 
 run: build
-	./butler-server
+	./target/butler-server
 
 clean:
 	rm -f butler-server

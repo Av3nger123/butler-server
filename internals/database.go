@@ -2,6 +2,8 @@ package internals
 
 import (
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -121,29 +123,65 @@ func ParseRows(rows *sql.Rows) ([]map[string]interface{}, interface{}, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	columnTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, 0, err
+	}
 	var totalCount interface{}
 	var result []map[string]interface{}
 	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(interface{})
+	}
 	for rows.Next() {
-
-		for i := range values {
-			values[i] = new(interface{})
-		}
 		err := rows.Scan(values...)
 		if err != nil {
 			return nil, 0, err
 		}
 		rowData := make(map[string]interface{})
 		for i, column := range columns {
+			decodedValue, _ := decodeColumnValue(*values[i].(*interface{}), columnTypes[i])
 			if column != "total_count" {
-				rowData[column] = *values[i].(*interface{})
+				rowData[column] = decodedValue
 			} else {
-				totalCount = *values[i].(*interface{})
+				totalCount = decodedValue
 			}
 		}
 		result = append(result, rowData)
 	}
 	return result, totalCount, err
+}
+
+func decodeColumnValue(value interface{}, columnType *sql.ColumnType) (interface{}, error) {
+	dataType := columnType.DatabaseTypeName()
+	switch v := value.(type) {
+	case []byte:
+		if strings.Contains(strings.ToLower(dataType), "json") {
+			var data map[string]interface{}
+			err := json.Unmarshal(v, &data)
+			if err != nil {
+				return nil, err
+			}
+			return data, nil
+		}
+		return string(v), nil
+
+	case int64:
+		return v, nil
+	case float64:
+		return v, nil
+	case bool:
+		return v, nil
+	case string:
+		return v, nil
+	default:
+		decoded, err := base64.StdEncoding.DecodeString(fmt.Sprintf("%v", value))
+		if err != nil {
+			return nil, err
+		}
+		return decoded, nil
+
+	}
 }
 
 func FilterValues(filters map[string]string) []interface{} {
@@ -216,22 +254,17 @@ func ConstructCondition(column, operator, value string, whereClauses []string) s
 }
 
 func ConvertIndexDef(sqlStatement string) (map[string]interface{}, error) {
-	// Define a regular expression pattern to extract relevant information
 	pattern := `^CREATE\s+(\w+)\s+INDEX\s+(\w+)\s+ON\s+public\.(\w+)\s+USING\s+(\w+)\s+\((\w+)\)`
 
-	// Use regex to find matches in the SQL statement
 	re := regexp.MustCompile(pattern)
 	matches := re.FindStringSubmatch(sqlStatement)
-	fmt.Println(matches)
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("No match found in the SQL statement")
 	}
 
-	// Extract matched groups
 	isUnique := strings.TrimSpace(matches[1]) == "UNIQUE"
 	indexName, _, indexAlgorithm, columnName := matches[2], matches[3], matches[4], matches[5]
 
-	// Create a map with the extracted information
 	indexInfo := map[string]interface{}{
 		"indexName":      indexName,
 		"indexAlgorithm": indexAlgorithm,
@@ -345,7 +378,7 @@ func MergeMetaData(schemaDetails map[string]SchemaDetails, indexDetails []IndexD
 	for i := 0; i < len(indexDetails); i++ {
 		indexDetail := indexDetails[i]
 		schema := schemaDetails[indexDetail.ColumnName]
-		if strings.Contains(indexDetail.IndexName, "pkey") {
+		if strings.Contains(indexDetail.IndexName, "pkey") || strings.Contains(indexDetail.IndexName, "PRIMARY") {
 			schema.IsPrimary = true
 		}
 		schema.Index = true

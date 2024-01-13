@@ -235,7 +235,6 @@ func HandleData(c *gin.Context) {
 	}
 
 	key := ctx.RedisClient.GenerateDataKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName, requestData.TableName, c.Request.URL.RawQuery)
-	fmt.Println(key)
 	res, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for data")
