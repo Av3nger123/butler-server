@@ -26,7 +26,7 @@ type Result struct {
 type DatabaseConfig struct {
 	Driver   string
 	Hostname string
-	Port     int
+	Port     string
 	Username string
 	Password string
 	Database string

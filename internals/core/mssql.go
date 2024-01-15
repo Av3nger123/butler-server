@@ -13,7 +13,7 @@ type MsSQLDatabase struct {
 }
 
 func (m *MsSQLDatabase) Connect() error {
-	connectionString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;",
+	connectionString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%s;",
 		m.config.Hostname, m.config.Username, m.config.Password, m.config.Port)
 	if m.config.Database != "" {
 		connectionString += "database=" + m.config.Database

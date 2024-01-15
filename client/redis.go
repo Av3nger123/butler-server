@@ -26,6 +26,9 @@ const (
 
 	// KeyPrefixMetadata is the prefix for data keys
 	KeyPrefixData = "Data"
+
+	// KeyPrefixCluster is the prefix for data keys
+	KeyPrefixCluster = "Cluster"
 )
 
 // NewRedisClient creates a new RedisClient instance
@@ -95,6 +98,10 @@ func (r *RedisClient) GenerateDatabaseKey(clusterID string) string {
 	return fmt.Sprintf("%s:%s", KeyPrefixDatabase, clusterID)
 }
 
+func (r *RedisClient) GenerateCLusterKey(clusterID string) string {
+	return fmt.Sprintf("%s:%s", KeyPrefixCluster, clusterID)
+}
+
 func (r *RedisClient) GenerateTablesKey(clusterID, databaseName string) string {
 	return fmt.Sprintf("%s:%s~%s", KeyPrefixTables, clusterID, databaseName)
 }
@@ -103,6 +110,6 @@ func (r *RedisClient) GenerateMetadataKey(clusterID, databaseName, tableName str
 	return fmt.Sprintf("%s:%s~%s~%s", KeyPrefixMetadata, clusterID, databaseName, tableName)
 }
 
-func (r *RedisClient) GenerateDataKey(clusterID, databaseName, tableName, query string) string {
-	return fmt.Sprintf("%s:%s~%s~%s~%s", KeyPrefixData, clusterID, databaseName, tableName, query)
+func (r *RedisClient) GenerateDataKey(query string) string {
+	return fmt.Sprintf("%s:%s", KeyPrefixData, query)
 }

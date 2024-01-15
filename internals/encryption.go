@@ -4,37 +4,40 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
+	"fmt"
 )
 
-const nonceSize = 12
-
-func Decrypt(data string, key []byte) (string, error) {
-	cipherText, err := base64.StdEncoding.DecodeString(data)
+func Decrypt(encryptedData string, key []byte, iv, tag string) ([]byte, error) {
+	b64EncryptedData, err := base64.StdEncoding.DecodeString(encryptedData)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("error decoding base64 encrypted data: %w", err)
 	}
 
-	// Extract nonce, encrypted payload, and tag
-	nonce := cipherText[:12]
-	encryptedPayload := cipherText[12 : len(cipherText)-16]
-	tag := cipherText[len(cipherText)-16:]
-
-	block, err := aes.NewCipher(key)
+	b64Tag, err := base64.StdEncoding.DecodeString(tag)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("error decoding base64 tag: %w", err)
 	}
 
-	// Create a GCM cipher
-	aesGCM, err := cipher.NewGCM(block)
+	b64Iv, err := base64.StdEncoding.DecodeString(iv)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("error decoding base64 tag: %w", err)
 	}
 
-	// Decrypt the payload
-	decryptedPayload, err := aesGCM.Open(nil, nonce, encryptedPayload, tag)
+	// Parse key and IV
+	parsedKey, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("error creating AES cipher: %w", err)
 	}
 
-	return string(decryptedPayload), nil
+	aesGCM, err := cipher.NewGCM(parsedKey)
+	if err != nil {
+		return nil, fmt.Errorf("error creating GCM cipher: %w", err)
+	}
+	decrypted, err := aesGCM.Open(nil, b64Iv, b64EncryptedData, b64Tag)
+	if err != nil {
+		return nil, fmt.Errorf("decryption failed: %w", err)
+	}
+
+	fmt.Printf("Decrypted data: %s\n", string(decrypted)) // Log decrypted data
+	return decrypted, nil
 }

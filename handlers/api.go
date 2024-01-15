@@ -2,7 +2,11 @@ package handlers
 
 import (
 	"butler-server/client"
+	"butler-server/config"
+	"butler-server/internals"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -28,13 +32,14 @@ func StartServer(dbClient *client.Database, redisClient *client.RedisClient, por
 
 	r.Use(corsMiddleware())
 	r.Use(setupHandlerContext(dbClient, redisClient))
+	r.Use(decryptPayloadMiddleware())
 
 	r.POST("/query", HandleQuery)
-	r.POST("/databases", HandleDatabases)
-	r.POST("/tables", HandleTables)
-	r.POST("/metadata", HandleMetaData)
-	r.POST("/data", HandleData)
-	r.POST("/ping", HandlePing)
+	r.GET("/databases/:id", HandleDatabases)
+	r.GET("/tables/:id", HandleTables)
+	r.GET("/metadata/:id", HandleMetaData)
+	r.GET("/data/:id", HandleData)
+	r.GET("/ping/:id", HandlePing)
 
 	log.Fatal(r.Run())
 }
@@ -51,6 +56,46 @@ func corsMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+func decryptPayloadMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == "GET" {
+			c.Next()
+			return
+		}
+		var queryRequest internals.QueryRequest
+		if config.GetString("ENCRYPTION") == "true" {
+			fmt.Println("here")
+			var data struct {
+				EncryptedPayload string `json:"encryptedPayload"`
+				Tag              string `json:"tag"`
+				IV               string `json:"iv"`
+			}
+
+			if err := c.BindJSON(&data); err != nil {
+				internals.BadRequestError(err, c, "Invalid request body")
+				return
+			}
+			decrypted, err := internals.Decrypt(data.EncryptedPayload, []byte("your_secret_key_here_of_32_chars"), data.IV, data.Tag)
+			if err != nil {
+				internals.InternalServerError(err, c, "Decryption error")
+				return
+			}
+			if err := json.Unmarshal(decrypted, &queryRequest); err != nil {
+				internals.BadRequestError(err, c, "Invalid payload format")
+				return
+			}
+		} else {
+			if err := c.ShouldBindJSON(&queryRequest); err != nil {
+				internals.BadRequestError(err, c, "Invalid payload format")
+				return
+			}
+		}
+		c.Set("queryRequest", queryRequest)
+		c.Next()
+
 	}
 }
 

@@ -17,7 +17,7 @@ type PostgreSQLDatabase struct {
 }
 
 func (p *PostgreSQLDatabase) Connect() error {
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s", p.config.Hostname, p.config.Port, p.config.Username, p.config.Password)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s", p.config.Hostname, p.config.Port, p.config.Username, p.config.Password)
 	if p.config.Database != "" {
 		connStr += " dbname=" + p.config.Database
 	} else {

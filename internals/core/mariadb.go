@@ -13,7 +13,7 @@ type MariaDatabase struct {
 }
 
 func (m *MariaDatabase) Connect() error {
-	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%d)",
+	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)",
 		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
 	if m.config.Database != "" {
 		connectionString += "/" + m.config.Database

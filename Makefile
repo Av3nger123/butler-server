@@ -1,4 +1,7 @@
-build:
+lint:
+	golangci-lint run
+
+build: lint
 	go build -o ./target/butler-server ./cmd/
 
 run: build

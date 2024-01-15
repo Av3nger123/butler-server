@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"butler-server/client"
 	"butler-server/internals"
 	"butler-server/internals/core"
+	"butler-server/internals/utils"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,43 +22,20 @@ type Result struct {
 	Error   error
 }
 
-func parseRequest(c *gin.Context) (*internals.QueryRequest, error) {
-	// var requestBody struct {
-	// 	EncryptedData string `json:"encrypted_payload"`
-	// }
-
-	var requestData internals.QueryRequest
-
-	if err := c.ShouldBindJSON(&requestData); err != nil {
-		return nil, err
-	}
-	// key := []byte("your_secret_key_here_of_32_chars")
-
-	// decryptedData, err := internals.Decrypt(requestBody.EncryptedData, key)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// if err := json.Unmarshal([]byte(decryptedData), &requestData); err != nil {
-	// 	return nil, err
-	// }
-	return &requestData, nil
-
-}
-
 func HandleDatabases(c *gin.Context) {
-	requestData, err := parseRequest(c)
-	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
-		return
-	}
+
 	ctx, err := GetClientContext(c)
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Handler context")
 		return
 	}
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
 
-	key := ctx.RedisClient.GenerateDatabaseKey(fmt.Sprintf("%d", requestData.Id))
+	key := ctx.RedisClient.GenerateDatabaseKey(fmt.Sprintf("%d", clusterData.Cluster.ID))
 	result, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Database")
@@ -62,11 +44,11 @@ func HandleDatabases(c *gin.Context) {
 		return
 	}
 	db, err := core.NewDatabase(core.DatabaseConfig{
-		Driver:   requestData.Driver,
-		Hostname: requestData.Host,
-		Port:     requestData.Port,
-		Username: requestData.Username,
-		Password: requestData.Password,
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
 	})
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
@@ -85,15 +67,17 @@ func HandleDatabases(c *gin.Context) {
 	}
 	dbMap := make(map[string]interface{})
 	dbMap["databases"] = databases
-	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
+	if err := ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour)); err != nil {
+		fmt.Println("failed to save databases into cache")
+	}
 	c.JSON(http.StatusOK, gin.H{"messages": "Databases found", "databases": databases})
 }
 
 func HandleTables(c *gin.Context) {
-	requestData, err := parseRequest(c)
-	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
-		return
+
+	dbName := c.Query("db")
+	if dbName == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 	}
 
 	ctx, err := GetClientContext(c)
@@ -101,8 +85,13 @@ func HandleTables(c *gin.Context) {
 		internals.InternalServerError(err, c, "Failed to get Handler context")
 		return
 	}
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
 
-	key := ctx.RedisClient.GenerateTablesKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName)
+	key := ctx.RedisClient.GenerateTablesKey(fmt.Sprintf("%d", clusterData.Cluster.ID), dbName)
 	res, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Tables")
@@ -112,12 +101,12 @@ func HandleTables(c *gin.Context) {
 	}
 
 	db, err := core.NewDatabase(core.DatabaseConfig{
-		Driver:   requestData.Driver,
-		Hostname: requestData.Host,
-		Port:     requestData.Port,
-		Username: requestData.Username,
-		Password: requestData.Password,
-		Database: requestData.DbName,
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
+		Database: dbName,
 	})
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
@@ -136,7 +125,9 @@ func HandleTables(c *gin.Context) {
 	}
 	dbMap := make(map[string]interface{})
 	dbMap["tables"] = tables
-	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
+	if err := ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour)); err != nil {
+		fmt.Println("failed to save tables into cache")
+	}
 	c.JSON(http.StatusOK, gin.H{"messages": "Tables found", "tables": tables})
 }
 
@@ -171,10 +162,14 @@ func HandleQuery(c *gin.Context) {
 
 func HandleMetaData(c *gin.Context) {
 
-	requestData, err := parseRequest(c)
-	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
-		return
+	dbName := c.Query("db")
+	if dbName == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+	}
+
+	table := c.Query("table")
+	if table == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
 	}
 
 	ctx, err := GetClientContext(c)
@@ -183,22 +178,28 @@ func HandleMetaData(c *gin.Context) {
 		return
 	}
 
-	key := ctx.RedisClient.GenerateMetadataKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName, requestData.TableName)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateMetadataKey(fmt.Sprintf("%d", clusterData.Cluster.ID), dbName, table)
 	result, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for Metadata")
 	} else {
-		c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": result["metadata"]})
+		c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + table + " found", "metadata": result["metadata"]})
 		return
 	}
 
 	db, err := core.NewDatabase(core.DatabaseConfig{
-		Driver:   requestData.Driver,
-		Hostname: requestData.Host,
-		Port:     requestData.Port,
-		Username: requestData.Username,
-		Password: requestData.Password,
-		Database: requestData.DbName,
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
+		Database: dbName,
 	})
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
@@ -210,22 +211,28 @@ func HandleMetaData(c *gin.Context) {
 	}
 	defer db.Close()
 
-	schemaDetails, err := db.Metadata(requestData.TableName)
+	schemaDetails, err := db.Metadata(table)
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	dbMap := make(map[string]interface{})
 	dbMap["metadata"] = schemaDetails
-	ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour))
-	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + requestData.TableName + " found", "metadata": schemaDetails})
+	if err := ctx.RedisClient.SetMap(key, dbMap, time.Duration(24*time.Hour)); err != nil {
+		fmt.Println("failed to save metadata into cache")
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + table + " found", "metadata": schemaDetails})
 }
 func HandleData(c *gin.Context) {
 
-	requestData, err := parseRequest(c)
-	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
-		return
+	dbName := c.Query("db")
+	if dbName == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+	}
+
+	table := c.Query("table")
+	if table == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
 	}
 
 	ctx, err := GetClientContext(c)
@@ -234,7 +241,13 @@ func HandleData(c *gin.Context) {
 		return
 	}
 
-	key := ctx.RedisClient.GenerateDataKey(fmt.Sprintf("%d", requestData.Id), requestData.DbName, requestData.TableName, c.Request.URL.RawQuery)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
+
+	key := ctx.RedisClient.GenerateDataKey(c.Request.URL.RawQuery)
 	res, err := ctx.RedisClient.GetMap(key)
 	if err != nil {
 		log.Printf("Cache hit miss for data")
@@ -244,12 +257,12 @@ func HandleData(c *gin.Context) {
 	}
 
 	db, err := core.NewDatabase(core.DatabaseConfig{
-		Driver:   requestData.Driver,
-		Hostname: requestData.Host,
-		Port:     requestData.Port,
-		Username: requestData.Username,
-		Password: requestData.Password,
-		Database: requestData.DbName,
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
+		Database: dbName,
 	})
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
@@ -268,7 +281,7 @@ func HandleData(c *gin.Context) {
 	filterParam := c.Query("filter")
 	filterOperator := c.Query("operator")
 
-	dbMap, err := db.Data(requestData.TableName, core.Filter{
+	dbMap, err := db.Data(table, core.Filter{
 		Page:     pageStr,
 		Size:     sizeStr,
 		Sort:     sortBy,
@@ -280,24 +293,42 @@ func HandleData(c *gin.Context) {
 		internals.InternalServerError(err, c, "Failed to run query")
 		return
 	}
-	ctx.RedisClient.SetMap(key, dbMap, time.Duration(time.Hour))
+	if err := ctx.RedisClient.SetMap(key, dbMap, time.Duration(time.Hour)); err != nil {
+		fmt.Println("failed to save table data into cache")
+	}
 	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": dbMap["data"], "count": dbMap["count"]})
 }
 
 func HandlePing(c *gin.Context) {
-	requestData, err := parseRequest(c)
+	clusterId := c.Param("id")
+	data, err := client.GetClusterAPI(clusterId)
 	if err != nil {
-		internals.BadRequestError(err, c, "Failed to parse request body")
+		internals.InternalServerError(err, c, "Failed to get Cluster Data")
 		return
 	}
-
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ctx, err := GetClientContext(c)
+		if err != nil {
+			return
+		}
+		byteData, err := json.Marshal(data)
+		if err != nil {
+			return
+		}
+		redisClient := ctx.RedisClient
+		if err := redisClient.SetString(redisClient.GenerateCLusterKey(strconv.Itoa(data.Cluster.ID)), string(byteData), time.Duration(24*time.Hour)); err != nil {
+			fmt.Println("failed to save cluster data into cache")
+		}
+	}()
 	db, err := core.NewDatabase(core.DatabaseConfig{
-		Driver:   requestData.Driver,
-		Hostname: requestData.Host,
-		Port:     requestData.Port,
-		Username: requestData.Username,
-		Password: requestData.Password,
-		Database: requestData.DbName,
+		Driver:   data.Cluster.Driver,
+		Hostname: data.Cluster.Host,
+		Port:     data.Cluster.Port,
+		Username: data.Cluster.Username,
+		Password: data.Cluster.Password,
 	})
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
@@ -308,6 +339,6 @@ func HandlePing(c *gin.Context) {
 		return
 	}
 	defer db.Close()
-
+	wg.Wait()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Database server connected"})
 }

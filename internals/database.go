@@ -84,10 +84,16 @@ func ExecuteQuery(db *sql.DB, query string) (*sql.Rows, error) {
 	}
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			rollbackError := tx.Rollback()
+			if rollbackError != nil {
+				err = rollbackError
+			}
 			panic(p)
 		} else if err != nil {
-			tx.Rollback()
+			rollbackError := tx.Rollback()
+			if rollbackError != nil {
+				err = rollbackError
+			}
 		} else {
 			err = tx.Commit()
 		}

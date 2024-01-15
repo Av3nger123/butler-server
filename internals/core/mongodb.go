@@ -20,7 +20,7 @@ type MongoDBDatabase struct {
 
 func (m *MongoDBDatabase) Connect() error {
 
-	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%d",
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s",
 		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
 
 	if m.config.Database != "" {
