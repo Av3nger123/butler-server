@@ -2,7 +2,7 @@
 package client
 
 import (
-	"butler-server/initializers"
+	"butler-server/internals"
 	"database/sql"
 )
 
@@ -12,9 +12,9 @@ type Database struct {
 }
 
 // NewDatabase creates a new Database instance
-func NewDatabase() *Database {
+func NewDatabase(db *sql.DB) *Database {
 	return &Database{
-		db: initializers.Db,
+		db: db,
 	}
 }
 
@@ -26,36 +26,10 @@ func (d *Database) Execute(query string) ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	result, err := RowsToJSON(rows)
+	result, _, err := internals.ParseRows(rows)
 	if err != nil {
 		return nil, err
 	}
 
-	return result, nil
-}
-
-// RowsToJSON converts database rows to JSON
-func RowsToJSON(rows *sql.Rows) ([]map[string]interface{}, error) {
-	columns, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	var result []map[string]interface{}
-	values := make([]interface{}, len(columns))
-	for rows.Next() {
-
-		for i := range values {
-			values[i] = new(interface{})
-		}
-		err := rows.Scan(values...)
-		if err != nil {
-			return nil, err
-		}
-		rowData := make(map[string]interface{})
-		for i, column := range columns {
-			rowData[column] = *values[i].(*interface{})
-		}
-		result = append(result, rowData)
-	}
 	return result, nil
 }

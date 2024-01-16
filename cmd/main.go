@@ -10,11 +10,17 @@ import (
 func main() {
 	config.LoadEnv()
 
-	initializers.InitPostgres()
-	initializers.InitRedis()
+	db, err := initializers.InitPostgres()
+	if err != nil {
+		panic(err)
+	}
+	redis, err := initializers.InitRedis()
+	if err != nil {
+		panic(err)
+	}
 
-	dbClient := client.NewDatabase()
-	redisClient := client.NewRedisClient()
+	dbClient := client.NewDatabase(db)
+	redisClient := client.NewRedisClient(redis)
 
 	handlers.StartServer(dbClient, redisClient, config.GetString("PORT"))
 }

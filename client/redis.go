@@ -1,7 +1,6 @@
 package client
 
 import (
-	"butler-server/initializers"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -32,9 +31,9 @@ const (
 )
 
 // NewRedisClient creates a new RedisClient instance
-func NewRedisClient() *RedisClient {
+func NewRedisClient(redis *redis.Client) *RedisClient {
 	return &RedisClient{
-		client: initializers.RedisClient,
+		client: redis,
 	}
 }
 
@@ -98,8 +97,8 @@ func (r *RedisClient) GenerateDatabaseKey(clusterID string) string {
 	return fmt.Sprintf("%s:%s", KeyPrefixDatabase, clusterID)
 }
 
-func (r *RedisClient) GenerateCLusterKey(clusterID string) string {
-	return fmt.Sprintf("%s:%s", KeyPrefixCluster, clusterID)
+func (r *RedisClient) GenerateClusterKey(clusterID string, sessionToken string) string {
+	return fmt.Sprintf("%s:%s~%s", KeyPrefixCluster, clusterID, sessionToken)
 }
 
 func (r *RedisClient) GenerateTablesKey(clusterID, databaseName string) string {

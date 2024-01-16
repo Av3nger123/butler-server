@@ -8,9 +8,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var Db *sql.DB
-
-func InitPostgres() {
+func InitPostgres() (*sql.DB, error) {
 
 	// PostgreSQL connection
 	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
@@ -21,7 +19,8 @@ func InitPostgres() {
 	err = db.Ping()
 	if err != nil {
 		log.Fatal("Error connecting to PostgreSQL:", err)
+		return nil, err
 	}
 
-	Db = db
+	return db, nil
 }

@@ -10,7 +10,7 @@ import (
 
 var RedisClient *redis.Client
 
-func InitRedis() {
+func InitRedis() (*redis.Client, error) {
 	// Redis connection
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     config.GetString("REDIS_ADDR"),
@@ -21,8 +21,9 @@ func InitRedis() {
 	pong, err := redisClient.Ping().Result()
 	if err != nil {
 		log.Fatal("Error connecting to Redis:", err)
+		return nil, err
 	}
 	fmt.Println("Connected to Redis! Server response:", pong)
 
-	RedisClient = redisClient
+	return redisClient, nil
 }

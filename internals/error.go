@@ -21,5 +21,7 @@ func InternalServerError(err error, c *gin.Context, message string) {
 
 func BadRequestError(err error, c *gin.Context, message string) {
 	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": message})
-
+}
+func UnAuthorizedError(err error, c *gin.Context, message string) {
+	c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error(), "message": message})
 }
