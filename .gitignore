@@ -1,3 +1,4 @@
 main
 dump.rdb
-butler-server
+/target
+.env
