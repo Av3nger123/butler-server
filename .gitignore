@@ -1,4 +1,4 @@
 main
 dump.rdb
 /target
-.env
+.env.local
