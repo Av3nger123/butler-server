@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"butler-server/client"
+	"butler-server/config"
 	"butler-server/internals"
 	"butler-server/internals/core"
 	"butler-server/internals/utils"
@@ -25,9 +26,9 @@ type Result struct {
 
 func HandleDatabases(c *gin.Context) {
 
-	sessionToken, err := c.Cookie("next-auth.csrf-token")
+	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
 	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access thi resource")
+		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 		return
 	}
 	ctx, err := GetClientContext(c)
@@ -82,9 +83,9 @@ func HandleDatabases(c *gin.Context) {
 func HandleTables(c *gin.Context) {
 
 	dbName := c.Query("db")
-	sessionToken, err := c.Cookie("next-auth.csrf-token")
+	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
 	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access thi resource")
+		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 		return
 	}
 
@@ -175,9 +176,9 @@ func HandleQuery(c *gin.Context) {
 
 func HandleMetaData(c *gin.Context) {
 
-	sessionToken, err := c.Cookie("next-auth.csrf-token")
+	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
 	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access thi resource")
+		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 		return
 	}
 
@@ -247,9 +248,9 @@ func HandleMetaData(c *gin.Context) {
 }
 func HandleData(c *gin.Context) {
 
-	sessionToken, err := c.Cookie("next-auth.csrf-token")
+	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
 	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access thi resource")
+		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 		return
 	}
 
@@ -340,7 +341,7 @@ func HandlePing(c *gin.Context) {
 	clusterId := c.Param("id")
 	var sessionToken string
 	if found == true {
-		sessionToken, err = c.Cookie("next-auth.csrf-token")
+		sessionToken, err = c.Cookie(config.GetString("CSRF_TOKEN"))
 		if err != nil {
 			internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 			return
