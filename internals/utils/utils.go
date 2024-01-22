@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 )
 
-func GetClusterData(redisClient *client.RedisClient, clusterId, sessionToken string) (client.ClusterData, error) {
-	clusterData, err := redisClient.GetString(redisClient.GenerateClusterKey(clusterId, sessionToken))
+func GetClusterData(redisClient *client.RedisClient, clusterId string) (client.ClusterData, error) {
+	clusterData, err := redisClient.GetString(redisClient.GenerateClusterKey(clusterId))
 	if err != nil {
 		return client.ClusterData{}, err
 	}

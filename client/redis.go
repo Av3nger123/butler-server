@@ -97,8 +97,8 @@ func (r *RedisClient) GenerateDatabaseKey(clusterID string) string {
 	return fmt.Sprintf("%s:%s", KeyPrefixDatabase, clusterID)
 }
 
-func (r *RedisClient) GenerateClusterKey(clusterID string, sessionToken string) string {
-	return fmt.Sprintf("%s:%s~%s", KeyPrefixCluster, clusterID, sessionToken)
+func (r *RedisClient) GenerateClusterKey(clusterID string) string {
+	return fmt.Sprintf("%s:%s", KeyPrefixCluster, clusterID)
 }
 
 func (r *RedisClient) GenerateTablesKey(clusterID, databaseName string) string {

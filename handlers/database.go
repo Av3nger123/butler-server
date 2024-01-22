@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"butler-server/client"
-	"butler-server/config"
 	"butler-server/internals"
 	"butler-server/internals/core"
 	"butler-server/internals/utils"
@@ -26,17 +25,12 @@ type Result struct {
 
 func HandleDatabases(c *gin.Context) {
 
-	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
-	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
-		return
-	}
 	ctx, err := GetClientContext(c)
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Handler context")
 		return
 	}
-	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"), sessionToken)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
@@ -83,12 +77,6 @@ func HandleDatabases(c *gin.Context) {
 func HandleTables(c *gin.Context) {
 
 	dbName := c.Query("db")
-	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
-	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
-		return
-	}
-
 	if dbName == "" {
 		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 		return
@@ -99,7 +87,7 @@ func HandleTables(c *gin.Context) {
 		internals.InternalServerError(err, c, "Failed to get Handler context")
 		return
 	}
-	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"), sessionToken)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
@@ -176,12 +164,6 @@ func HandleQuery(c *gin.Context) {
 
 func HandleMetaData(c *gin.Context) {
 
-	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
-	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
-		return
-	}
-
 	dbName := c.Query("db")
 
 	if dbName == "" {
@@ -201,7 +183,7 @@ func HandleMetaData(c *gin.Context) {
 		return
 	}
 
-	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"), sessionToken)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
@@ -248,12 +230,6 @@ func HandleMetaData(c *gin.Context) {
 }
 func HandleData(c *gin.Context) {
 
-	sessionToken, err := c.Cookie(config.GetString("CSRF_TOKEN"))
-	if err != nil {
-		internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
-		return
-	}
-
 	dbName := c.Query("db")
 	if dbName == "" {
 		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
@@ -270,7 +246,7 @@ func HandleData(c *gin.Context) {
 		return
 	}
 
-	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"), sessionToken)
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
 		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
@@ -339,9 +315,7 @@ func HandlePing(c *gin.Context) {
 	token := c.Request.Header.Get("Authorization")
 	found := repository.CheckAccount(ctx.DBClient, token)
 	clusterId := c.Param("id")
-	var sessionToken string
 	if found == true {
-		sessionToken, err = c.Cookie(config.GetString("CSRF_TOKEN"))
 		if err != nil {
 			internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 			return
@@ -363,7 +337,7 @@ func HandlePing(c *gin.Context) {
 			return
 		}
 		redisClient := ctx.RedisClient
-		if err := redisClient.SetString(redisClient.GenerateClusterKey(strconv.Itoa(data.Cluster.ID), sessionToken), string(byteData), time.Duration(24*time.Hour)); err != nil {
+		if err := redisClient.SetString(redisClient.GenerateClusterKey(strconv.Itoa(data.Cluster.ID)), string(byteData), time.Duration(24*time.Hour)); err != nil {
 			fmt.Println("failed to save cluster data into cache")
 		}
 	}()
