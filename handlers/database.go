@@ -315,7 +315,7 @@ func HandlePing(c *gin.Context) {
 	token := c.Request.Header.Get("Authorization")
 	found := repository.CheckAccount(ctx.DBClient, token)
 	clusterId := c.Param("id")
-	if found == true {
+	if found {
 		if err != nil {
 			internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 			return

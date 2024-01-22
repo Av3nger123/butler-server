@@ -2,7 +2,6 @@ package internals
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -160,6 +159,9 @@ func ParseRows(rows *sql.Rows) ([]map[string]interface{}, interface{}, error) {
 
 func decodeColumnValue(value interface{}, columnType *sql.ColumnType) (interface{}, error) {
 	dataType := columnType.DatabaseTypeName()
+	fmt.Println(columnType.Name())
+	fmt.Println(columnType.Name())
+	fmt.Println(columnType.DatabaseTypeName())
 	switch v := value.(type) {
 	case []byte:
 		if strings.Contains(strings.ToLower(dataType), "json") {
@@ -171,21 +173,8 @@ func decodeColumnValue(value interface{}, columnType *sql.ColumnType) (interface
 			return data, nil
 		}
 		return string(v), nil
-
-	case int64:
-		return v, nil
-	case float64:
-		return v, nil
-	case bool:
-		return v, nil
-	case string:
-		return v, nil
 	default:
-		decoded, err := base64.StdEncoding.DecodeString(fmt.Sprintf("%v", value))
-		if err != nil {
-			return nil, err
-		}
-		return decoded, nil
+		return v, nil
 
 	}
 }
