@@ -11,7 +11,7 @@ import (
 func InitPostgres() (*sql.DB, error) {
 
 	// PostgreSQL connection
-	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=require")
+	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}

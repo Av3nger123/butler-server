@@ -150,8 +150,18 @@ func (m *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{
 	return dbMap, nil
 }
 
-func (m *MySQLDatabase) Query() ([]interface{}, error) {
-	return nil, nil
+func (m *MySQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+	rows, err := m.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result, _, err := internals.ParseRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (m *MySQLDatabase) Close() error {
@@ -207,7 +217,6 @@ func (m *MySQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map
 }
 
 func (m *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.SchemaDetails, error) {
-	fmt.Println(table)
 	query := fmt.Sprintf(`
 		SELECT ordinal_position as ordinal_position,
 			column_name as column_name,

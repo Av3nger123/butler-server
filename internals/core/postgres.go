@@ -4,6 +4,7 @@ import (
 	"butler-server/internals"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -174,8 +175,25 @@ func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]inter
 	return dbMap, nil
 }
 
-func (p *PostgreSQLDatabase) Query() ([]interface{}, error) {
-	return nil, nil
+func (p *PostgreSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+
+	if ok, err := regexp.MatchString(`(?i)limit`, query); !ok || err != nil {
+		query += fmt.Sprintf(` LIMIT %d`, size)
+	}
+	if ok, err := regexp.MatchString(`(?i)offset`, query); !ok || err != nil {
+		query += fmt.Sprintf(` OFFSET %d`, page*size)
+	}
+	rows, err := p.conn.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result, _, err := internals.ParseRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (m *PostgreSQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {

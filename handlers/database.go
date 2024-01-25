@@ -134,32 +134,57 @@ func HandleTables(c *gin.Context) {
 }
 
 func HandleQuery(c *gin.Context) {
-	// requestData, err := parseRequest(c)
-	// if err != nil {
-	// 	internals.BadRequestError(err, c, "Failed to parse request body")
-	// 	return
-	// }
+	dbName := c.Query("db")
+	query := c.Query("query")
+	page, err := strconv.Atoi(c.Query("page"))
+	if err != nil {
+		internals.BadRequestError(nil, c, "page query param should beof type int in the url")
+		return
+	}
+	size, err := strconv.Atoi(c.Query("size"))
+	if err != nil {
+		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		return
+	}
+	if dbName == "" {
+		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		return
+	}
 
-	// db, err := internals.ConnectToDB(requestData.Driver, requestData.Username, requestData.Password, requestData.Host, requestData.Port, "")
-	// if err != nil {
-	// 	internals.InternalServerError(err, c, "Failed connecting to the db cluster")
-	// 	return
-	// }
-	// defer db.Close()
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Handler context")
+		return
+	}
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
 
-	// rows, err := internals.ExecuteQuery(db, requestData.Query)
-	// if err != nil {
-	// 	internals.InternalServerError(err, c, "Failed to run query")
-	// 	return
-	// }
-	// defer rows.Close()
-
-	// result, _, err := internals.ParseRows(rows)
-	// if err != nil {
-	// 	internals.InternalServerError(err, c, "Failed to parse rows")
-	// 	return
-	// }
-	// c.JSON(http.StatusOK, gin.H{"result": result})
+	db, err := core.NewDatabase(core.DatabaseConfig{
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
+		Database: dbName,
+	})
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
+	if err := db.Connect(); err != nil {
+		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		return
+	}
+	defer db.Close()
+	result, err := db.Query(query, page, size)
+	if err != nil {
+		internals.InternalServerError(err, c, "Failed Execute the query")
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": result, "message": "Results fetched"})
 }
 
 func HandleMetaData(c *gin.Context) {

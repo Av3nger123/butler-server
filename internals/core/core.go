@@ -9,7 +9,7 @@ import (
 
 type Database interface {
 	Connect() error
-	Query() ([]interface{}, error)
+	Query(query string, page int, size int) ([]map[string]interface{}, error)
 	Close() error
 	Databases() ([]string, error)
 	Tables() ([]string, error)

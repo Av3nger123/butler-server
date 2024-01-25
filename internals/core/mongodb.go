@@ -105,7 +105,7 @@ func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interfac
 	return dbMap, nil
 }
 
-func (m *MongoDBDatabase) Query() ([]interface{}, error) {
+func (m *MongoDBDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 	return nil, nil
 }
 

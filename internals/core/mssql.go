@@ -186,7 +186,7 @@ func (m *MsSQLDatabase) Data(table string, filter Filter) (map[string]interface{
 	return dbMap, nil
 }
 
-func (m *MsSQLDatabase) Query() ([]interface{}, error) {
+func (m *MsSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 	return nil, nil
 }
 

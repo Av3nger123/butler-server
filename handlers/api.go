@@ -30,7 +30,7 @@ func StartServer(dbClient *client.Database, redisClient *client.RedisClient, por
 	r.Use(corsMiddleware())
 	r.Use(setupHandlerContext(dbClient, redisClient))
 
-	r.POST("/query", HandleQuery)
+	r.GET("/query/:id", HandleQuery)
 	r.GET("/databases/:id", HandleDatabases)
 	r.GET("/tables/:id", HandleTables)
 	r.GET("/metadata/:id", HandleMetaData)

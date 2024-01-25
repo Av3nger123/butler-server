@@ -159,9 +159,6 @@ func ParseRows(rows *sql.Rows) ([]map[string]interface{}, interface{}, error) {
 
 func decodeColumnValue(value interface{}, columnType *sql.ColumnType) (interface{}, error) {
 	dataType := columnType.DatabaseTypeName()
-	fmt.Println(columnType.Name())
-	fmt.Println(columnType.Name())
-	fmt.Println(columnType.DatabaseTypeName())
 	switch v := value.(type) {
 	case []byte:
 		if strings.Contains(strings.ToLower(dataType), "json") {
