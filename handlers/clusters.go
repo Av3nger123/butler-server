@@ -23,6 +23,18 @@ type Result struct {
 	Error   error
 }
 
+func InitClusterHandlers(router *gin.Engine) {
+	clientRoutes := router.Group("/cluster")
+	{
+		clientRoutes.GET("/query/:id", HandleQuery)
+		clientRoutes.GET("/databases/:id", HandleDatabases)
+		clientRoutes.GET("/tables/:id", HandleTables)
+		clientRoutes.GET("/metadata/:id", HandleMetaData)
+		clientRoutes.GET("/data/:id", HandleData)
+		clientRoutes.GET("/ping/:id", HandlePing)
+	}
+}
+
 func HandleDatabases(c *gin.Context) {
 
 	ctx, err := GetClientContext(c)

@@ -2,25 +2,22 @@ package initializers
 
 import (
 	"butler-server/config"
-	"database/sql"
 	"log"
 
-	_ "github.com/lib/pq"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
-func InitPostgres() (*sql.DB, error) {
-
+func InitPostgres() (*gorm.DB, error) {
 	// PostgreSQL connection
-	db, err := sql.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = db.Ping()
+	db, err := gorm.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
 	if err != nil {
 		log.Fatal("Error connecting to PostgreSQL:", err)
 		return nil, err
 	}
+
+	// Enable verbose logging (optional)
+	db.LogMode(true)
 
 	return db, nil
 }

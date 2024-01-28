@@ -3,6 +3,7 @@ package handlers
 import (
 	"butler-server/client"
 	"butler-server/config"
+	"butler-server/repository"
 	"errors"
 	"log"
 
@@ -26,16 +27,13 @@ func NewHandlerContext(dbClient *client.Database, redisClient *client.RedisClien
 
 func StartServer(dbClient *client.Database, redisClient *client.RedisClient, port string) {
 	r := gin.Default()
-
 	r.Use(corsMiddleware())
 	r.Use(setupHandlerContext(dbClient, redisClient))
 
-	r.GET("/query/:id", HandleQuery)
-	r.GET("/databases/:id", HandleDatabases)
-	r.GET("/tables/:id", HandleTables)
-	r.GET("/metadata/:id", HandleMetaData)
-	r.GET("/data/:id", HandleData)
-	r.GET("/ping/:id", HandlePing)
+	repo := repository.NewRepository(dbClient.Db)
+
+	InitClusterHandlers(r)
+	InitViewHandlers(r, repo)
 
 	log.Fatal(r.Run())
 }
