@@ -4,20 +4,16 @@ import (
 	"butler-server/config"
 	"log"
 
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func InitPostgres() (*gorm.DB, error) {
-	// PostgreSQL connection
-	db, err := gorm.Open("postgres", config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable")
+	db, err := gorm.Open(postgres.Open(config.GetString("POSTGRES_CONNECTION_STRING")+"?sslmode=disable"), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Error connecting to PostgreSQL:", err)
 		return nil, err
 	}
-
-	// Enable verbose logging (optional)
-	db.LogMode(true)
 
 	return db, nil
 }

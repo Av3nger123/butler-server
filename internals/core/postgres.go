@@ -158,6 +158,7 @@ func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]inter
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(query)
 	rows, err := m.conn.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
 		return nil, err

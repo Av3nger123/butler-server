@@ -198,49 +198,49 @@ func ParseOperatorAndValue(filterValue string) (string, string) {
 func ConstructCondition(column, operator, value string, whereClauses []string) string {
 	switch operator {
 	case "=":
-		return fmt.Sprintf("%s = $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" = $%d`, column, len(whereClauses)+1)
 	case "!=":
-		return fmt.Sprintf("%s != $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" != $%d`, column, len(whereClauses)+1)
 	case "<":
-		return fmt.Sprintf("%s < $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" < $%d`, column, len(whereClauses)+1)
 	case ">":
-		return fmt.Sprintf("%s > $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" > $%d`, column, len(whereClauses)+1)
 	case ">=":
-		return fmt.Sprintf("%s >= $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" >= $%d`, column, len(whereClauses)+1)
 	case "<=":
-		return fmt.Sprintf("%s <= $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" <= $%d`, column, len(whereClauses)+1)
 	case "in":
 		// Assuming value is a comma-separated list, adjust as needed
-		return fmt.Sprintf("%s IN ($%d)", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" IN ($%d)`, column, len(whereClauses)+1)
 	case "not in":
 		// Assuming value is a comma-separated list, adjust as needed
-		return fmt.Sprintf("%s NOT IN ($%d)", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" NOT IN ($%d)`, column, len(whereClauses)+1)
 	case "is null":
-		return fmt.Sprintf("%s IS NULL", column)
+		return fmt.Sprintf(`"%s" IS NULL`, column)
 	case "is not null":
-		return fmt.Sprintf("%s IS NOT NULL", column)
+		return fmt.Sprintf(`"%s" IS NOT NULL`, column)
 	case "between":
 		// Assuming value is a comma-separated range, adjust as needed
-		return fmt.Sprintf("%s BETWEEN $%d AND $%d", column, len(whereClauses)+1, len(whereClauses)+2)
+		return fmt.Sprintf(`"%s" BETWEEN $%d AND $%d`, column, len(whereClauses)+1, len(whereClauses)+2)
 	case "not between":
 		// Assuming value is a comma-separated range, adjust as needed
-		return fmt.Sprintf("%s NOT BETWEEN $%d AND $%d", column, len(whereClauses)+1, len(whereClauses)+2)
+		return fmt.Sprintf(`"%s" NOT BETWEEN $%d AND $%d`, column, len(whereClauses)+1, len(whereClauses)+2)
 	case "contains":
 		// Assuming case-sensitive contains
-		return fmt.Sprintf("%s LIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" LIKE $%d`, column, len(whereClauses)+1)
 	case "not contains":
 		// Assuming case-sensitive not contains
-		return fmt.Sprintf("%s NOT LIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" NOT LIKE $%d`, column, len(whereClauses)+1)
 	case "contains_ci":
 		// Assuming case-insensitive contains
-		return fmt.Sprintf("%s ILIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" ILIKE $%d`, column, len(whereClauses)+1)
 	case "not contains_ci":
 		// Assuming case-insensitive not contains
-		return fmt.Sprintf("%s NOT ILIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" NOT ILIKE $%d`, column, len(whereClauses)+1)
 	case "has suffix":
-		return fmt.Sprintf("%s LIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" LIKE $%d`, column, len(whereClauses)+1)
 	case "has prefix":
-		return fmt.Sprintf("%s LIKE $%d", column, len(whereClauses)+1)
+		return fmt.Sprintf(`"%s" LIKE $%d`, column, len(whereClauses)+1)
 	}
 	return ""
 }

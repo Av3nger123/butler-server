@@ -1,7 +1,7 @@
 package client
 
 import (
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 // Database struct represents a PostgreSQL client

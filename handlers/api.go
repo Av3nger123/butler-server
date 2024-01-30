@@ -34,6 +34,7 @@ func StartServer(dbClient *client.Database, redisClient *client.RedisClient, por
 
 	InitClusterHandlers(r)
 	InitViewHandlers(r, repo)
+	InitCommitHandlers(r, repo)
 
 	log.Fatal(r.Run())
 }

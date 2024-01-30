@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"butler-server/client"
-	"butler-server/internals"
 	"butler-server/internals/core"
+	"butler-server/internals/errors"
 	"butler-server/internals/utils"
 	"butler-server/repository"
 	"encoding/json"
@@ -26,25 +26,25 @@ type Result struct {
 func InitClusterHandlers(router *gin.Engine) {
 	clientRoutes := router.Group("/cluster")
 	{
-		clientRoutes.GET("/query/:id", HandleQuery)
-		clientRoutes.GET("/databases/:id", HandleDatabases)
-		clientRoutes.GET("/tables/:id", HandleTables)
-		clientRoutes.GET("/metadata/:id", HandleMetaData)
-		clientRoutes.GET("/data/:id", HandleData)
-		clientRoutes.GET("/ping/:id", HandlePing)
+		clientRoutes.GET("/query/:id", handleQuery)
+		clientRoutes.GET("/databases/:id", handleDatabases)
+		clientRoutes.GET("/tables/:id", handleTables)
+		clientRoutes.GET("/metadata/:id", handleMetaData)
+		clientRoutes.GET("/data/:id", handleData)
+		clientRoutes.GET("/ping/:id", handlePing)
 	}
 }
 
-func HandleDatabases(c *gin.Context) {
+func handleDatabases(c *gin.Context) {
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
 	}
 
@@ -64,18 +64,18 @@ func HandleDatabases(c *gin.Context) {
 		Password: clusterData.Cluster.Password,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
 
 	databases, err := db.Databases()
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		errors.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	dbMap := make(map[string]interface{})
@@ -86,22 +86,22 @@ func HandleDatabases(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"messages": "Databases found", "databases": databases})
 }
 
-func HandleTables(c *gin.Context) {
+func handleTables(c *gin.Context) {
 
 	dbName := c.Query("db")
 	if dbName == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 		return
 	}
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
 	}
 
@@ -123,18 +123,18 @@ func HandleTables(c *gin.Context) {
 		Database: dbName,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
 
 	tables, err := db.Tables()
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		errors.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	dbMap := make(map[string]interface{})
@@ -145,32 +145,32 @@ func HandleTables(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"messages": "Tables found", "tables": tables})
 }
 
-func HandleQuery(c *gin.Context) {
+func handleQuery(c *gin.Context) {
 	dbName := c.Query("db")
 	query := c.Query("query")
 	page, err := strconv.Atoi(c.Query("page"))
 	if err != nil {
-		internals.BadRequestError(nil, c, "page query param should beof type int in the url")
+		errors.BadRequestError(nil, c, "page query param should beof type int in the url")
 		return
 	}
 	size, err := strconv.Atoi(c.Query("size"))
 	if err != nil {
-		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 		return
 	}
 	if dbName == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 		return
 	}
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
 	}
 
@@ -183,46 +183,46 @@ func HandleQuery(c *gin.Context) {
 		Database: dbName,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
 	result, err := db.Query(query, page, size)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed Execute the query")
+		errors.InternalServerError(err, c, "Failed Execute the query")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"result": result, "message": "Results fetched"})
 }
 
-func HandleMetaData(c *gin.Context) {
+func handleMetaData(c *gin.Context) {
 
 	dbName := c.Query("db")
 
 	if dbName == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 		return
 	}
 
 	table := c.Query("table")
 	if table == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
 		return
 	}
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 
 	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
 	}
 
@@ -244,18 +244,18 @@ func HandleMetaData(c *gin.Context) {
 		Database: dbName,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
 
 	schemaDetails, err := db.Metadata(table)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		errors.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	dbMap := make(map[string]interface{})
@@ -265,27 +265,27 @@ func HandleMetaData(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Metadata for " + table + " found", "metadata": schemaDetails})
 }
-func HandleData(c *gin.Context) {
+func handleData(c *gin.Context) {
 
 	dbName := c.Query("db")
 	if dbName == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
 	}
 
 	table := c.Query("table")
 	if table == "" {
-		internals.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
+		errors.BadRequestError(nil, c, "mandatory query parameter table is missing in the url")
 	}
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 
 	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
 		return
 	}
 
@@ -307,11 +307,11 @@ func HandleData(c *gin.Context) {
 		Database: dbName,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()
@@ -332,7 +332,7 @@ func HandleData(c *gin.Context) {
 		Operator: filterOperator,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to run query")
+		errors.InternalServerError(err, c, "Failed to run query")
 		return
 	}
 	if err := ctx.RedisClient.SetMap(key, dbMap, time.Duration(time.Hour)); err != nil {
@@ -341,11 +341,11 @@ func HandleData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"messages": "Data found for table", "data": dbMap["data"], "count": dbMap["count"]})
 }
 
-func HandlePing(c *gin.Context) {
+func handlePing(c *gin.Context) {
 
 	ctx, err := GetClientContext(c)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Handler context")
+		errors.InternalServerError(err, c, "Failed to get handler context")
 		return
 	}
 
@@ -354,13 +354,13 @@ func HandlePing(c *gin.Context) {
 	clusterId := c.Param("id")
 	if found {
 		if err != nil {
-			internals.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
+			errors.UnAuthorizedError(err, c, "you are unauthorized to access this resource")
 			return
 		}
 	}
 	data, err := client.GetClusterAPI(clusterId)
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed to get Cluster Data")
+		errors.InternalServerError(err, c, "Failed to get Cluster Data")
 		return
 	}
 
@@ -386,11 +386,11 @@ func HandlePing(c *gin.Context) {
 		Password: data.Cluster.Password,
 	})
 	if err != nil {
-		internals.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
 		return
 	}
 	if err := db.Connect(); err != nil {
-		internals.InternalServerError(err, c, "Failed connecting to the db cluster")
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
 		return
 	}
 	defer db.Close()

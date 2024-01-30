@@ -3,15 +3,15 @@ package repository
 import (
 	"time"
 
-	_ "github.com/jinzhu/gorm/dialects/postgres"
+	_ "gorm.io/gorm"
 )
 
 type ViewRepository struct {
-	repo Repository
+	Repository
 }
 
 func NewViewRepository(repo Repository) ViewRepository {
-	return ViewRepository{repo: repo}
+	return ViewRepository{repo}
 }
 
 type DataView struct {
@@ -28,7 +28,7 @@ func (DataView) TableName() string {
 }
 
 func (v ViewRepository) SaveView(view DataView) error {
-	if err := v.repo.Create(&view).Error; err != nil {
+	if err := v.Create(&view).Error; err != nil {
 		return err
 	}
 	return nil
@@ -37,7 +37,7 @@ func (v ViewRepository) SaveView(view DataView) error {
 func (v ViewRepository) GetViews(clusterId, databaseId string) ([]DataView, error) {
 	var views []DataView
 
-	query := v.repo.DB
+	query := v.DB
 
 	if clusterId != "" {
 		query.Where("cluster_id = ?", clusterId)
