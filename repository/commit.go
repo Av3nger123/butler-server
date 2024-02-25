@@ -21,6 +21,7 @@ type Commit struct {
 	CreatedAT  time.Time `gorm:"column:createdAt" json:"createdAt"`
 	ExecutedAt time.Time `gorm:"column:executedAt;nullable" json:"executedAt"`
 	ClusterId  string    `gorm:"column:clusterId" json:"clusterId"`
+	IsExecuted bool      `gorm:"column:isExecuted" json:"isExecuted"`
 	DatabaseId string    `gorm:"column:databaseId" json:"databaseId"`
 }
 

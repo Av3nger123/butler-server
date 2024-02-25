@@ -40,12 +40,11 @@ func (v ViewRepository) GetViews(clusterId, databaseId string) ([]DataView, erro
 	query := v.DB
 
 	if clusterId != "" {
-		query.Where("cluster_id = ?", clusterId)
+		query = query.Where(`"clusterId" = ?`, clusterId)
 	}
 	if databaseId != "" {
-		query.Where("database_id = ?", databaseId)
+		query = query.Where(`"databaseId" = ?`, databaseId)
 	}
-
 	if err := query.Find(&views).Error; err != nil {
 		return nil, err
 	}
