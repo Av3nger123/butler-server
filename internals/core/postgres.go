@@ -250,5 +250,27 @@ func (this *PostgreSQLDatabase) Close() error {
 }
 
 func (this *PostgreSQLDatabase) Execute(queries []string) error {
+	tx, err := this.conn.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() error {
+		if err := tx.Rollback(); err != nil {
+			return err
+		}
+		return nil
+	}()
+
+	for _, query := range queries {
+		_, err := tx.Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 	return nil
 }
