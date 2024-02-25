@@ -12,11 +12,11 @@ type MsSQLDatabase struct {
 	config DatabaseConfig
 }
 
-func (m *MsSQLDatabase) Connect() error {
+func (this *MsSQLDatabase) Connect() error {
 	connectionString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%s;",
-		m.config.Hostname, m.config.Username, m.config.Password, m.config.Port)
-	if m.config.Database != "" {
-		connectionString += "database=" + m.config.Database
+		this.config.Hostname, this.config.Username, this.config.Password, this.config.Port)
+	if this.config.Database != "" {
+		connectionString += "database=" + this.config.Database
 	}
 
 	db, err := sql.Open("sqlserver", connectionString)
@@ -28,13 +28,13 @@ func (m *MsSQLDatabase) Connect() error {
 		return err
 	}
 
-	m.conn = db
+	this.conn = db
 	fmt.Println("Connected to MSSQL database")
 	return nil
 }
 
-func (m *MsSQLDatabase) Databases() ([]string, error) {
-	rows, err := m.conn.Query("SELECT name FROM sys.databases")
+func (this *MsSQLDatabase) Databases() ([]string, error) {
+	rows, err := this.conn.Query("SELECT name FROM sys.databases")
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +52,9 @@ func (m *MsSQLDatabase) Databases() ([]string, error) {
 
 	return databases, nil
 }
-func (m *MsSQLDatabase) Tables() ([]string, error) {
-	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_catalog = '%s'", m.config.Database)
-	rows, err := m.conn.Query(query)
+func (this *MsSQLDatabase) Tables() ([]string, error) {
+	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_catalog = '%s'", this.config.Database)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (m *MsSQLDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (m *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+func (this *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
 
@@ -94,7 +94,7 @@ func (m *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 		JOIN sys.columns AS c2
 			ON fkc.referenced_object_id = c2.object_id
 			AND fkc.referenced_column_id = c2.column_id;`
-		schemaDetails, err := internals.FetchSchemaDetails(m.conn, query, table)
+		schemaDetails, err := internals.FetchSchemaDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -121,7 +121,7 @@ func (m *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 		) sub
 		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
 		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey;`
-		foreignKeyDetails, err := internals.FetchForeignKeyDetails(m.conn, query, table)
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
 			return
@@ -138,7 +138,7 @@ func (m *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 		FROM sys.indexes i
 		INNER JOIN sys.objects o ON i.object_id = o.object_id
 		WHERE o.name = ?;`
-		indexDetails, err := internals.FetchIndexDetails(m.conn, query, table)
+		indexDetails, err := internals.FetchIndexDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
@@ -161,7 +161,7 @@ func (m *MsSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	return schemaDetails, nil
 }
 
-func (m *MsSQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
+func (this *MsSQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
 	filterMap := internals.ParseFilterParam(filter.Filter)
 	query, err := ParseSQLQuery(table, filter, filterMap)
@@ -169,7 +169,7 @@ func (m *MsSQLDatabase) Data(table string, filter Filter) (map[string]interface{
 		return nil, err
 	}
 
-	rows, err := m.conn.Query(query, internals.FilterValues(filterMap)...)
+	rows, err := this.conn.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
 		return nil, err
 	}
@@ -186,16 +186,20 @@ func (m *MsSQLDatabase) Data(table string, filter Filter) (map[string]interface{
 	return dbMap, nil
 }
 
-func (m *MsSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+func (this *MsSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 	return nil, nil
 }
 
-func (m *MsSQLDatabase) Close() error {
-	if m.conn != nil {
-		if err := m.conn.Close(); err != nil {
+func (this *MsSQLDatabase) Close() error {
+	if this.conn != nil {
+		if err := this.conn.Close(); err != nil {
 			return err
 		}
 		fmt.Println("Closed MsSQL database connection")
 	}
+	return nil
+}
+
+func (this *MsSQLDatabase) Execute(queries []string) error {
 	return nil
 }

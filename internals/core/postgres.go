@@ -17,10 +17,10 @@ type PostgreSQLDatabase struct {
 	config DatabaseConfig
 }
 
-func (p *PostgreSQLDatabase) Connect() error {
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s", p.config.Hostname, p.config.Port, p.config.Username, p.config.Password)
-	if p.config.Database != "" {
-		connStr += " dbname=" + p.config.Database
+func (this *PostgreSQLDatabase) Connect() error {
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s", this.config.Hostname, this.config.Port, this.config.Username, this.config.Password)
+	if this.config.Database != "" {
+		connStr += " dbname=" + this.config.Database
 	} else {
 		connStr += " dbname=postgres"
 	}
@@ -33,7 +33,7 @@ func (p *PostgreSQLDatabase) Connect() error {
 	if err = db.Ping(); err != nil {
 		return err
 	}
-	p.conn = db
+	this.conn = db
 	fmt.Println("Connected to PostgreSQL database")
 	return nil
 }
@@ -77,7 +77,7 @@ func (m *PostgreSQLDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+func (this *PostgreSQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -87,7 +87,7 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 		SELECT column_name, data_type, character_maximum_length, is_nullable, column_default, udt_name, ordinal_position 
 		FROM information_schema.columns 
 		WHERE table_name = $1;`
-		schemaDetails, err := internals.FetchSchemaDetails(p.conn, query, table)
+		schemaDetails, err := internals.FetchSchemaDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -114,7 +114,7 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 		) sub
 		JOIN pg_attribute AS ta ON ta.attrelid = conrelid AND ta.attnum = conkey
 		JOIN pg_attribute AS fa ON fa.attrelid = confrelid AND fa.attnum = confkey;`
-		foreignKeyDetails, err := internals.FetchForeignKeyDetails(p.conn, query, table)
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
 			return
@@ -128,7 +128,7 @@ func (p *PostgreSQLDatabase) Metadata(table string) (map[string]internals.Schema
 		SELECT indexname, indexdef
         FROM pg_indexes
         WHERE tablename = $1;`
-		indexDetails, err := internals.FetchIndexDetails(p.conn, query, table)
+		indexDetails, err := internals.FetchIndexDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
@@ -176,7 +176,7 @@ func (m *PostgreSQLDatabase) Data(table string, filter Filter) (map[string]inter
 	return dbMap, nil
 }
 
-func (p *PostgreSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+func (this *PostgreSQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 
 	if ok, err := regexp.MatchString(`(?i)limit`, query); !ok || err != nil {
 		query += fmt.Sprintf(` LIMIT %d`, size)
@@ -184,7 +184,7 @@ func (p *PostgreSQLDatabase) Query(query string, page int, size int) ([]map[stri
 	if ok, err := regexp.MatchString(`(?i)offset`, query); !ok || err != nil {
 		query += fmt.Sprintf(` OFFSET %d`, page*size)
 	}
-	rows, err := p.conn.Query(query)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -239,12 +239,16 @@ func (m *PostgreSQLDatabase) parseSQLQuery(table string, filter Filter, filterMa
 	return query, nil
 }
 
-func (p *PostgreSQLDatabase) Close() error {
-	if p.conn != nil {
-		if err := p.conn.Close(); err != nil {
+func (this *PostgreSQLDatabase) Close() error {
+	if this.conn != nil {
+		if err := this.conn.Close(); err != nil {
 			return err
 		}
 		fmt.Println("Closed PostgreSQL database connection")
 	}
+	return nil
+}
+
+func (this *PostgreSQLDatabase) Execute(queries []string) error {
 	return nil
 }

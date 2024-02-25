@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -32,7 +33,9 @@ func InitClusterHandlers(router *gin.Engine) {
 		clientRoutes.GET("/metadata/:id", handleMetaData)
 		clientRoutes.GET("/data/:id", handleData)
 		clientRoutes.GET("/ping/:id", handlePing)
+		clientRoutes.POST("/execute/:id", handlePing)
 	}
+
 }
 
 func handleDatabases(c *gin.Context) {
@@ -396,4 +399,81 @@ func handlePing(c *gin.Context) {
 	defer db.Close()
 	wg.Wait()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Database server connected"})
+}
+
+func handleExecute(c *gin.Context) {
+	type req struct {
+		commits     []string `json:"commits"`
+		executeType string   `json:"type"`
+	}
+	var request req
+	if err := c.BindJSON(&request); err != nil {
+		errors.InternalServerError(err, c, "failed to parse body")
+		return
+	}
+
+	dbName := c.Query("db")
+	if dbName == "" {
+		errors.BadRequestError(nil, c, "mandatory query parameter db is missing in the url")
+	}
+
+	ctx, err := GetClientContext(c)
+	if err != nil {
+		errors.InternalServerError(err, c, "Failed to get handler context")
+		return
+	}
+	clusterData, err := utils.GetClusterData(ctx.RedisClient, c.Param("id"))
+	if err != nil {
+		errors.InternalServerError(err, c, "Failed to get Cluster Data, Please reconnect again!")
+		return
+	}
+
+	commits, err := commitRepository.GetCommitsByIds(request.commits)
+
+	db, err := core.NewDatabase(core.DatabaseConfig{
+		Driver:   clusterData.Cluster.Driver,
+		Hostname: clusterData.Cluster.Host,
+		Port:     clusterData.Cluster.Port,
+		Username: clusterData.Cluster.Username,
+		Password: clusterData.Cluster.Password,
+		Database: dbName,
+	})
+
+	var commitIds []int
+	for _, v := range commits {
+		commitIds = append(commitIds, v.ID)
+	}
+
+	queryRecords, err := queryRepository.GetQueriesWithCommitIds(commitIds)
+	if err != nil {
+		errors.InternalServerError(err, c, "failed to fetch queries of the commits")
+		return
+	}
+
+	commitMap := make(map[int][]string, 0)
+
+	sort.Ints(commitIds)
+	for _, query := range queryRecords {
+		if query.Type == request.executeType {
+			commitMap[query.CommitId] = append(commitMap[query.CommitId], query.Query)
+		}
+	}
+	queries := make([]string, 0)
+	for _, val := range commitIds {
+		queries = append(queries, commitMap[val]...)
+	}
+	if err := db.Execute(queries); err != nil {
+		errors.InternalServerError(err, c, "executing queries failed")
+		return
+	}
+	var result bool
+	if request.executeType == "default" {
+		result = true
+	} else {
+		result = false
+	}
+	commitRepository.UpdateCommits(commits, result)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Executed commits"})
+
 }

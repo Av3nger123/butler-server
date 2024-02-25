@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -11,8 +10,14 @@ type CommitRepository struct {
 	Repository
 }
 
+var commitInstance *CommitRepository = new(CommitRepository)
+
 func NewCommitRepository(repo Repository) CommitRepository {
-	return CommitRepository{repo}
+	if commitInstance == nil {
+		return CommitRepository{repo}
+
+	}
+	return *commitInstance
 }
 
 type Commit struct {
@@ -51,11 +56,22 @@ func (c CommitRepository) GetCommits(databaseId, clusterId string) ([]Commit, er
 	return commits, nil
 }
 
+func (c CommitRepository) GetCommitsByIds(ids []string) ([]Commit, error) {
+	var commits []Commit
+	query := c.DB.Where(`"id" IN ?`, ids)
+	if err := query.Find(&commits).Error; err != nil {
+		return nil, err
+	}
+	return commits, nil
+}
+
 func (c CommitRepository) SaveCommitWithTx(tx *gorm.DB, commit Commit) (Commit, error) {
-	fmt.Println(commit)
 	if err := tx.Create(&commit).Error; err != nil {
-		fmt.Println(err.Error())
 		return commit, err
 	}
 	return commit, nil
+}
+
+func (c CommitRepository) UpdateCommits(commits []Commit, isExecuted bool) {
+	c.DB.Model(&commits).Update("isExecuted", false)
 }

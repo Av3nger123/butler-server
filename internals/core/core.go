@@ -11,6 +11,7 @@ type Database interface {
 	Connect() error
 	Query(query string, page int, size int) ([]map[string]interface{}, error)
 	Close() error
+	Execute([]string) error
 	Databases() ([]string, error)
 	Tables() ([]string, error)
 	Metadata(table string) (map[string]internals.SchemaDetails, error)
