@@ -25,13 +25,8 @@ type QueryRepository struct {
 	Repository
 }
 
-var queryInstance *QueryRepository = new(QueryRepository)
-
 func NewQueryRepository(repo Repository) QueryRepository {
-	if queryInstance == nil {
-		return QueryRepository{repo}
-	}
-	return *queryInstance
+	return QueryRepository{repo}
 }
 
 func (q QueryRepository) SaveQueries(queries []string, tableId string, commitId int, queryType string) ([]Query, error) {

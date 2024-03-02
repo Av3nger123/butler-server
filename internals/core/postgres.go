@@ -249,21 +249,20 @@ func (this *PostgreSQLDatabase) Close() error {
 	return nil
 }
 
-func (this *PostgreSQLDatabase) Execute(queries []string) error {
-	tx, err := this.conn.Begin()
+func (p *PostgreSQLDatabase) Execute(queries []string) error {
+	tx, err := p.conn.Begin()
 	if err != nil {
 		return err
 	}
 
-	defer func() error {
+	defer func() {
 		if err := tx.Rollback(); err != nil {
-			return err
+			fmt.Println(err)
 		}
-		return nil
 	}()
 
 	for _, query := range queries {
-		_, err := tx.Exec(query)
+		_, err := tx.Exec(fmt.Sprintf(` %s `, query))
 		if err != nil {
 			return err
 		}

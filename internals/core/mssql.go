@@ -206,11 +206,10 @@ func (this *MsSQLDatabase) Execute(queries []string) error {
 		return err
 	}
 
-	defer func() error {
+	defer func() {
 		if err := tx.Rollback(); err != nil {
-			return err
+			fmt.Println(err)
 		}
-		return nil
 	}()
 
 	for _, query := range queries {

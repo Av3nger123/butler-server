@@ -33,7 +33,7 @@ func InitClusterHandlers(router *gin.Engine) {
 		clientRoutes.GET("/metadata/:id", handleMetaData)
 		clientRoutes.GET("/data/:id", handleData)
 		clientRoutes.GET("/ping/:id", handlePing)
-		clientRoutes.POST("/execute/:id", handlePing)
+		clientRoutes.POST("/execute/:id", handleExecute)
 	}
 
 }
@@ -403,8 +403,8 @@ func handlePing(c *gin.Context) {
 
 func handleExecute(c *gin.Context) {
 	type req struct {
-		commits     []string `json:"commits"`
-		executeType string   `json:"type"`
+		Commits     []string `json:"commits"`
+		ExecuteType string   `json:"type"`
 	}
 	var request req
 	if err := c.BindJSON(&request); err != nil {
@@ -428,7 +428,11 @@ func handleExecute(c *gin.Context) {
 		return
 	}
 
-	commits, err := commitRepository.GetCommitsByIds(request.commits)
+	commits, err := commitRepository.GetCommitsByIds(request.Commits)
+	if err != nil {
+		errors.InternalServerError(err, c, "Failed to get commits")
+		return
+	}
 
 	db, err := core.NewDatabase(core.DatabaseConfig{
 		Driver:   clusterData.Cluster.Driver,
@@ -438,6 +442,10 @@ func handleExecute(c *gin.Context) {
 		Password: clusterData.Cluster.Password,
 		Database: dbName,
 	})
+	if err != nil {
+		errors.InternalServerError(err, c, "Failed connecting due to wrong configuration")
+		return
+	}
 
 	var commitIds []int
 	for _, v := range commits {
@@ -454,7 +462,7 @@ func handleExecute(c *gin.Context) {
 
 	sort.Ints(commitIds)
 	for _, query := range queryRecords {
-		if query.Type == request.executeType {
+		if query.Type == request.ExecuteType {
 			commitMap[query.CommitId] = append(commitMap[query.CommitId], query.Query)
 		}
 	}
@@ -462,12 +470,17 @@ func handleExecute(c *gin.Context) {
 	for _, val := range commitIds {
 		queries = append(queries, commitMap[val]...)
 	}
+	if err := db.Connect(); err != nil {
+		errors.InternalServerError(err, c, "Failed connecting to the db cluster")
+		return
+	}
+
 	if err := db.Execute(queries); err != nil {
 		errors.InternalServerError(err, c, "executing queries failed")
 		return
 	}
 	var result bool
-	if request.executeType == "default" {
+	if request.ExecuteType == "default" {
 		result = true
 	} else {
 		result = false
