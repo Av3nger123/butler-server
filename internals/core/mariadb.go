@@ -12,11 +12,11 @@ type MariaDatabase struct {
 	config DatabaseConfig
 }
 
-func (m *MariaDatabase) Connect() error {
+func (this *MariaDatabase) Connect() error {
 	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)",
-		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
-	if m.config.Database != "" {
-		connectionString += "/" + m.config.Database
+		this.config.Username, this.config.Password, this.config.Hostname, this.config.Port)
+	if this.config.Database != "" {
+		connectionString += "/" + this.config.Database
 	}
 
 	db, err := sql.Open("mysql", connectionString)
@@ -28,13 +28,13 @@ func (m *MariaDatabase) Connect() error {
 		return err
 	}
 
-	m.conn = db
+	this.conn = db
 	fmt.Println("Connected to MariaDB database")
 	return nil
 }
 
-func (m *MariaDatabase) Databases() ([]string, error) {
-	rows, err := m.conn.Query("SHOW DATABASES")
+func (this *MariaDatabase) Databases() ([]string, error) {
+	rows, err := this.conn.Query("SHOW DATABASES")
 	if err != nil {
 		return nil, err
 	}
@@ -52,9 +52,9 @@ func (m *MariaDatabase) Databases() ([]string, error) {
 
 	return databases, nil
 }
-func (m *MariaDatabase) Tables() ([]string, error) {
-	query := fmt.Sprintf("SHOW TABLES FROM %s", m.config.Database)
-	rows, err := m.conn.Query(query)
+func (this *MariaDatabase) Tables() ([]string, error) {
+	query := fmt.Sprintf("SHOW TABLES FROM %s", this.config.Database)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (m *MariaDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+func (this *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
 
@@ -89,7 +89,7 @@ func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 			ordinal_position
 		FROM information_schema.COLUMNS
 		WHERE table_name = ?;`
-		schemaDetails, err := internals.FetchSchemaDetails(m.conn, query, table)
+		schemaDetails, err := internals.FetchSchemaDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -118,7 +118,7 @@ func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 			ON rc.UNIQUE_CONSTRAINT_NAME = ccu.CONSTRAINT_NAME
 			AND rc.CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA
 		WHERE tc.CONSTRAINT_TYPE = 'FOREIGN KEY';`
-		foreignKeyDetails, err := internals.FetchForeignKeyDetails(m.conn, query, table)
+		foreignKeyDetails, err := internals.FetchForeignKeyDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "foreign key"}
 			return
@@ -132,7 +132,7 @@ func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 		SELECT index_name AS indexname, index_definition AS indexdef
 		FROM information_schema.STATISTICS
 		WHERE table_name = ?;`
-		indexDetails, err := internals.FetchIndexDetails(m.conn, query, table)
+		indexDetails, err := internals.FetchIndexDetails(this.conn, query, table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
@@ -155,7 +155,7 @@ func (m *MariaDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	return schemaDetails, nil
 }
 
-func (m *MariaDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
+func (this *MariaDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
 	filterMap := internals.ParseFilterParam(filter.Filter)
 	query, err := ParseSQLQuery(table, filter, filterMap)
@@ -163,7 +163,7 @@ func (m *MariaDatabase) Data(table string, filter Filter) (map[string]interface{
 		return nil, err
 	}
 
-	rows, err := m.conn.Query(query, internals.FilterValues(filterMap)...)
+	rows, err := this.conn.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
 		return nil, err
 	}
@@ -178,19 +178,43 @@ func (m *MariaDatabase) Data(table string, filter Filter) (map[string]interface{
 	dbMap["data"] = result
 	dbMap["count"] = count
 	return dbMap, nil
-
 }
 
-func (m *MariaDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+func (this *MariaDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 	return nil, nil
 }
 
-func (m *MariaDatabase) Close() error {
-	if m.conn != nil {
-		if err := m.conn.Close(); err != nil {
+func (this *MariaDatabase) Close() error {
+	if this.conn != nil {
+		if err := this.conn.Close(); err != nil {
 			return err
 		}
 		fmt.Println("Closed Maria database connection")
+	}
+	return nil
+}
+
+func (this *MariaDatabase) Execute(queries []string) error {
+	tx, err := this.conn.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	for _, query := range queries {
+		_, err := tx.Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return nil
 }

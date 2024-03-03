@@ -2,3 +2,4 @@ main
 dump.rdb
 /target
 .env.local
+/.fleet

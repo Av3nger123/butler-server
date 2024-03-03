@@ -18,13 +18,13 @@ type MongoDBDatabase struct {
 	conn   *mongo.Client
 }
 
-func (m *MongoDBDatabase) Connect() error {
+func (this *MongoDBDatabase) Connect() error {
 
 	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s",
-		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
+		this.config.Username, this.config.Password, this.config.Hostname, this.config.Port)
 
-	if m.config.Database != "" {
-		connectionString += "/" + m.config.Database
+	if this.config.Database != "" {
+		connectionString += "/" + this.config.Database
 	}
 
 	clientOptions := options.Client().ApplyURI(connectionString)
@@ -38,32 +38,32 @@ func (m *MongoDBDatabase) Connect() error {
 		return err
 	}
 
-	m.conn = client
+	this.conn = client
 	fmt.Println("Connected to MongoDB database")
 	return nil
 }
-func (m *MongoDBDatabase) Databases() ([]string, error) {
+func (this *MongoDBDatabase) Databases() ([]string, error) {
 	ctx := context.TODO()
-	databases, err := m.conn.ListDatabaseNames(ctx, nil)
+	databases, err := this.conn.ListDatabaseNames(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	return databases, nil
 }
-func (m *MongoDBDatabase) Tables() ([]string, error) {
+func (this *MongoDBDatabase) Tables() ([]string, error) {
 	ctx := context.TODO()
-	collections, err := m.conn.Database(m.config.Database).ListCollectionNames(ctx, nil)
+	collections, err := this.conn.Database(this.config.Database).ListCollectionNames(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	return collections, nil
 }
 
-func (m *MongoDBDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+func (this *MongoDBDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	return nil, nil
 }
 
-func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
+func (this *MongoDBDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 	filterBson, err := parseMongoDBFilters(filter.Filter)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interfac
 	options := options.Find().SetSkip(skip).SetLimit(limit).SetSort(sortBson)
 
 	// Perform the MongoDB find operation
-	collection := m.conn.Database(m.config.Database).Collection(table)
+	collection := this.conn.Database(this.config.Database).Collection(table)
 	ctx := context.TODO()
 	cursor, err := collection.Find(ctx, filterBson, options)
 	if err != nil {
@@ -105,13 +105,13 @@ func (m *MongoDBDatabase) Data(table string, filter Filter) (map[string]interfac
 	return dbMap, nil
 }
 
-func (m *MongoDBDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+func (this *MongoDBDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
 	return nil, nil
 }
 
-func (m *MongoDBDatabase) Close() error {
-	if m.conn != nil {
-		err := m.conn.Disconnect(context.TODO())
+func (this *MongoDBDatabase) Close() error {
+	if this.conn != nil {
+		err := this.conn.Disconnect(context.TODO())
 		if err != nil {
 			return err
 		}
@@ -223,4 +223,8 @@ func parseMongoDBPagination(page, size string) (int64, int64) {
 	limit := int64(sizeNum)
 
 	return skip, limit
+}
+
+func (this *MongoDBDatabase) Execute(queries []string) error {
+	return nil
 }

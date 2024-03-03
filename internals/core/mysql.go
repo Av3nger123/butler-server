@@ -16,11 +16,11 @@ type MySQLDatabase struct {
 	config DatabaseConfig
 }
 
-func (m *MySQLDatabase) Connect() error {
+func (this *MySQLDatabase) Connect() error {
 	connectionString := fmt.Sprintf("%s:%s@tcp(%s:%s)/",
-		m.config.Username, m.config.Password, m.config.Hostname, m.config.Port)
-	if m.config.Database != "" {
-		connectionString += m.config.Database
+		this.config.Username, this.config.Password, this.config.Hostname, this.config.Port)
+	if this.config.Database != "" {
+		connectionString += this.config.Database
 	}
 	db, err := sql.Open("mysql", connectionString)
 	if err != nil {
@@ -31,14 +31,14 @@ func (m *MySQLDatabase) Connect() error {
 		return err
 	}
 
-	m.conn = db
+	this.conn = db
 	fmt.Println("Connected to MySQL database")
 	return nil
 }
 
-func (m *MySQLDatabase) Databases() ([]string, error) {
+func (this *MySQLDatabase) Databases() ([]string, error) {
 	databaseQuery := "SHOW DATABASES"
-	rows, err := m.conn.Query(databaseQuery)
+	rows, err := this.conn.Query(databaseQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -55,9 +55,9 @@ func (m *MySQLDatabase) Databases() ([]string, error) {
 	}
 	return databases, nil
 }
-func (m *MySQLDatabase) Tables() ([]string, error) {
-	query := fmt.Sprintf("SHOW TABLES FROM %s", m.config.Database)
-	rows, err := m.conn.Query(query)
+func (this *MySQLDatabase) Tables() ([]string, error) {
+	query := fmt.Sprintf("SHOW TABLES FROM %s", this.config.Database)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (m *MySQLDatabase) Tables() ([]string, error) {
 
 	return tables, nil
 }
-func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
+func (this *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetails, error) {
 	resultCh := make(chan Result, 3)
 	var wg sync.WaitGroup
 
@@ -83,7 +83,7 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 
 	go func() {
 		defer wg.Done()
-		schemaDetails, err := m.fetchSchemaDetails(table)
+		schemaDetails, err := this.fetchSchemaDetails(table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "schema"}
 			return
@@ -92,7 +92,7 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	}()
 	go func() {
 		defer wg.Done()
-		foreignKeyDetails, err := m.fetchForeignKeyDetails(table)
+		foreignKeyDetails, err := this.fetchForeignKeyDetails(table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "fk"}
 			return
@@ -102,7 +102,7 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 
 	go func() {
 		defer wg.Done()
-		indexes, err := m.fetchIndexDetails(table)
+		indexes, err := this.fetchIndexDetails(table)
 		if err != nil {
 			resultCh <- Result{Details: nil, Error: err, Type: "index"}
 			return
@@ -125,15 +125,15 @@ func (m *MySQLDatabase) Metadata(table string) (map[string]internals.SchemaDetai
 	return schemaDetails, nil
 }
 
-func (m *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
+func (this *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{}, error) {
 
 	filterMap := internals.ParseFilterParam(filter.Filter)
-	query, err := m.parseSQLQuery(table, filter, filterMap)
+	query, err := this.parseSQLQuery(table, filter, filterMap)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := m.conn.Query(query, internals.FilterValues(filterMap)...)
+	rows, err := this.conn.Query(query, internals.FilterValues(filterMap)...)
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +150,8 @@ func (m *MySQLDatabase) Data(table string, filter Filter) (map[string]interface{
 	return dbMap, nil
 }
 
-func (m *MySQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
-	rows, err := m.conn.Query(query)
+func (this *MySQLDatabase) Query(query string, page int, size int) ([]map[string]interface{}, error) {
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -164,9 +164,9 @@ func (m *MySQLDatabase) Query(query string, page int, size int) ([]map[string]in
 	return result, nil
 }
 
-func (m *MySQLDatabase) Close() error {
-	if m.conn != nil {
-		if err := m.conn.Close(); err != nil {
+func (this *MySQLDatabase) Close() error {
+	if this.conn != nil {
+		if err := this.conn.Close(); err != nil {
 			return err
 		}
 		fmt.Println("Closed MySQL database connection")
@@ -174,7 +174,7 @@ func (m *MySQLDatabase) Close() error {
 	return nil
 }
 
-func (m *MySQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {
+func (this *MySQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map[string]string) (string, error) {
 	page, err := strconv.Atoi(filter.Page)
 	if err != nil {
 		return "", nil
@@ -216,7 +216,7 @@ func (m *MySQLDatabase) parseSQLQuery(table string, filter Filter, filterMap map
 	return query, nil
 }
 
-func (m *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.SchemaDetails, error) {
+func (this *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.SchemaDetails, error) {
 	query := fmt.Sprintf(`
 		SELECT ordinal_position as ordinal_position,
 			column_name as column_name,
@@ -225,8 +225,8 @@ func (m *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.S
 			column_default as column_default
 		FROM information_schema.columns
 		WHERE table_schema='%s' AND table_name='%s';
-	`, m.config.Database, table)
-	rows, err := m.conn.Query(query)
+	`, this.config.Database, table)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -253,14 +253,14 @@ func (m *MySQLDatabase) fetchSchemaDetails(table string) (map[string]internals.S
 	return schemaDetails, nil
 }
 
-func (m *MySQLDatabase) fetchIndexDetails(table string) ([]internals.IndexDetails, error) {
+func (this *MySQLDatabase) fetchIndexDetails(table string) ([]internals.IndexDetails, error) {
 	query := fmt.Sprintf(`
 		SELECT index_name as index_name, index_type AS index_algorithm,
 		CASE non_unique WHEN 0 THEN'TRUE'ELSE'FALSE'END AS is_unique,
 		column_name as column_name FROM information_schema.statistics 
 		WHERE table_schema='%s' AND table_name='%s' ORDER BY seq_in_index ASC;
-	`, m.config.Database, table)
-	rows, err := m.conn.Query(query)
+	`, this.config.Database, table)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -290,13 +290,13 @@ func (m *MySQLDatabase) fetchIndexDetails(table string) ([]internals.IndexDetail
 	return indexes, nil
 }
 
-func (m *MySQLDatabase) fetchForeignKeyDetails(table string) ([]internals.ForeignKeyDetails, error) {
+func (this *MySQLDatabase) fetchForeignKeyDetails(table string) ([]internals.ForeignKeyDetails, error) {
 	query := fmt.Sprintf(`
 		SELECT constraint_name,referenced_table_name,referenced_column_name,
 		column_name FROM information_schema.key_column_usage WHERE 
 		table_name='%s' AND table_schema='%s' AND referenced_column_name is not NULL;
-	`, table, m.config.Database)
-	rows, err := m.conn.Query(query)
+	`, table, this.config.Database)
+	rows, err := this.conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -325,4 +325,29 @@ func (m *MySQLDatabase) fetchForeignKeyDetails(table string) ([]internals.Foreig
 		foreignKeys = append(foreignKeys, result)
 	}
 	return foreignKeys, nil
+}
+
+func (this *MySQLDatabase) Execute(queries []string) error {
+	tx, err := this.conn.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	for _, query := range queries {
+		_, err := tx.Exec(query)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
