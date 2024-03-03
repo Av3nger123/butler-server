@@ -91,7 +91,7 @@ func handleGetCommits(c *gin.Context) {
 	page := c.Query("page")
 	size := c.Query("size")
 
-	commits, err := commitRepository.GetCommits(databaseId, clusterId, commitType, page, size)
+	commits, total, err := commitRepository.GetCommits(databaseId, clusterId, commitType, page, size)
 	if err != nil {
 		errors.InternalServerError(err, c, "failed to fetch commits")
 		return
@@ -114,5 +114,5 @@ func handleGetCommits(c *gin.Context) {
 		commitMap[query.CommitId] = append(commitMap[query.CommitId], query)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "commits found", "commits": commits, "queries": commitMap})
+	c.JSON(http.StatusOK, gin.H{"message": "commits found", "commits": commits, "queries": commitMap, "total": total})
 }

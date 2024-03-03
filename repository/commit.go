@@ -36,7 +36,7 @@ func (c CommitRepository) SaveCommit(commit Commit) (Commit, error) {
 	return commit, nil
 }
 
-func (c CommitRepository) GetCommits(databaseId, clusterId, commitType, page, size string) ([]Commit, error) {
+func (c CommitRepository) GetCommits(databaseId, clusterId, commitType, page, size string) ([]Commit, int64, error) {
 	commits := make([]Commit, 0)
 	if page == "" {
 		page = "0"
@@ -46,7 +46,7 @@ func (c CommitRepository) GetCommits(databaseId, clusterId, commitType, page, si
 	}
 	limit, _ := strconv.Atoi(size)
 	offset, _ := strconv.Atoi(page)
-	query := c.DB.Limit(limit).Offset(offset * limit)
+	query := c.DB
 	if databaseId != "" {
 		query = query.Where(`"databaseId" = ?`, databaseId)
 	}
@@ -54,15 +54,18 @@ func (c CommitRepository) GetCommits(databaseId, clusterId, commitType, page, si
 		query = query.Where(`"clusterId" = ?`, clusterId)
 	}
 	if commitType == "executed" {
-		if err := query.Order(`"executedAt" DESC`).Where(`"isExecuted" = true`).Find(&commits).Error; err != nil {
-			return nil, err
-		}
+		query = query.Order(`"executedAt" DESC`).Where(`"isExecuted" = true`)
 	} else {
-		if err := query.Order(`"createdAt" DESC`).Where(`"isExecuted" = false`).Find(&commits).Error; err != nil {
-			return nil, err
-		}
+		query = query.Order(`"createdAt" DESC`).Where(`"isExecuted" = false`)
 	}
-	return commits, nil
+	var total int64
+	if err := query.Model(&Commit{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := query.Limit(limit).Offset(offset * limit).Find(&commits).Error; err != nil {
+		return nil, 0, err
+	}
+	return commits, total, nil
 }
 
 func (c CommitRepository) GetCommitsByIds(ids []string) ([]Commit, error) {
