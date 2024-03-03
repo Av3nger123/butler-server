@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strconv"
 	"time"
 
 	"gorm.io/gorm"
@@ -35,32 +36,32 @@ func (c CommitRepository) SaveCommit(commit Commit) (Commit, error) {
 	return commit, nil
 }
 
-func (c CommitRepository) GetCommits(databaseId, clusterId string) ([]Commit, error) {
+func (c CommitRepository) GetCommits(databaseId, clusterId, commitType, page, size string) ([]Commit, error) {
 	commits := make([]Commit, 0)
-	created := make([]Commit, 0)
-	executed := make([]Commit, 0)
-	query := c.DB
+	if page == "" {
+		page = "0"
+	}
+	if size == "" {
+		size = "10"
+	}
+	limit, _ := strconv.Atoi(size)
+	offset, _ := strconv.Atoi(page)
+	query := c.DB.Limit(limit).Offset(offset * limit)
 	if databaseId != "" {
 		query = query.Where(`"databaseId" = ?`, databaseId)
 	}
 	if clusterId != "" {
 		query = query.Where(`"clusterId" = ?`, clusterId)
 	}
-	if err := query.Order(`"executedAt" DESC`).Where(`"isExecuted" = true`).Find(&executed).Error; err != nil {
-		return nil, err
+	if commitType == "executed" {
+		if err := query.Order(`"executedAt" DESC`).Where(`"isExecuted" = true`).Find(&commits).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		if err := query.Order(`"createdAt" DESC`).Where(`"isExecuted" = false`).Find(&commits).Error; err != nil {
+			return nil, err
+		}
 	}
-	query = c.DB
-	if databaseId != "" {
-		query = query.Where(`"databaseId" = ?`, databaseId)
-	}
-	if clusterId != "" {
-		query = query.Where(`"clusterId" = ?`, clusterId)
-	}
-	if err := query.Order(`"createdAt" DESC`).Where(`"isExecuted" = false`).Find(&created).Error; err != nil {
-		return nil, err
-	}
-	commits = append(commits, created...)
-	commits = append(commits, executed...)
 	return commits, nil
 }
 

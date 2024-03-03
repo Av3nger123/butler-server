@@ -87,8 +87,11 @@ func handleSaveCommits(c *gin.Context) {
 func handleGetCommits(c *gin.Context) {
 	databaseId := c.Query("databaseId")
 	clusterId := c.Query("clusterId")
+	commitType := c.Query("type")
+	page := c.Query("page")
+	size := c.Query("size")
 
-	commits, err := commitRepository.GetCommits(databaseId, clusterId)
+	commits, err := commitRepository.GetCommits(databaseId, clusterId, commitType, page, size)
 	if err != nil {
 		errors.InternalServerError(err, c, "failed to fetch commits")
 		return
